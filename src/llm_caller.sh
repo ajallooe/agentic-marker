@@ -89,10 +89,11 @@ call_claude() {
         fi
     else
         # Headless mode - use --print for non-interactive output
+        # Bypass permissions for automated execution
         if [[ -n "$output" ]]; then
-            claude --print $model_arg "$prompt" > "$output" 2>&1
+            claude --print --permission-mode bypassPermissions $model_arg "$prompt" > "$output" 2>&1
         else
-            claude --print $model_arg "$prompt"
+            claude --print --permission-mode bypassPermissions $model_arg "$prompt"
         fi
     fi
 }
@@ -126,10 +127,11 @@ call_gemini() {
         fi
     else
         # Headless mode - use positional prompt for one-shot execution
+        # Enable YOLO mode for automated execution (auto-approve all tools)
         if [[ -n "$output" ]]; then
-            gemini $model_arg "$prompt" > "$output" 2>&1
+            gemini --yolo $model_arg "$prompt" > "$output" 2>&1
         else
-            gemini $model_arg "$prompt"
+            gemini --yolo $model_arg "$prompt"
         fi
     fi
 }
@@ -169,10 +171,11 @@ call_codex() {
         fi
     else
         # Headless mode - use 'exec' subcommand for non-interactive execution
+        # Enable workspace-write sandbox for file creation
         if [[ -n "$output" ]]; then
-            codex exec $model_arg "$prompt" > "$output" 2>&1
+            codex exec --sandbox workspace-write $model_arg "$prompt" > "$output" 2>&1
         else
-            codex exec $model_arg "$prompt"
+            codex exec --sandbox workspace-write $model_arg "$prompt"
         fi
     fi
 }

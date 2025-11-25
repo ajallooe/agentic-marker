@@ -1,127 +1,169 @@
-Update README.md with recent improvements and corrections
+Add resume capability and update README documentation
 
-Updated README.md to reflect recent features and fixes, including improved
-progress tracking, create_overview.sh wrapper, --force-xargs option, and
-corrected provider names.
+Implemented comprehensive resume functionality for both marking scripts, allowing
+workflows to continue from where they left off after errors or interruptions.
+Updated README with detailed documentation of resume options.
 
 ## Changes Made
 
-### 1. Quick Start Section
-- Added "Debug Options" subsection
-- Documented `--force-xargs` flag for both marking scripts
-- Helps users test xargs fallback path
+### 1. Resume Capability Implementation
 
-### 2. Generating overview.md Section
-- Added `create_overview.sh` shell wrapper (recommended method)
-- Updated examples to use wrapper script
-- Still mentions Python direct call as alternative
+**Both mark_structured.sh and mark_freeform.sh:**
 
-### 3. Progress Tracking Section
-**Before (outdated):**
-```
-[A2/7] [Student 15/42] (35.7%) |███████████░░░░░░░| Processing...
-```
+Added three operational modes:
+- **Resume (default)**: Automatically skips completed stages and tasks
+- **`--no-resume`**: Regenerate from scratch, ignoring existing outputs
+- **`--clean`**: Remove entire processed/ directory and start fresh
 
-**After (accurate):**
-- GNU parallel: "Visual progress bar with percentage and ETA"
-- xargs: `[ 45%] Completed 100/224 tasks`
-- Explains what information is shown
-- Notes real-time updates
+**Stage-by-stage resume logic:**
+- Stage 1: Skip if submissions_manifest.json exists
+- Stage 2: Skip if activities.json (structured) or rubric/criteria (freeform) exist
+- Stage 3/4: Skip marker tasks where output .md file exists
+- Stage 5: Skip normalizer if scoring files exist
+- Stage 6: Skip dashboard if approved_scheme.json exists
+- Stage 7: Skip unifier tasks where feedback .md files exist
+- Stage 8: Skip aggregator if grades.csv exists
 
-### 4. Parallel Execution Section
-- Added "Execution Methods" subsection
-- Documents GNU parallel (recommended)
-- Documents xargs (fallback)
-- Documents sequential (final fallback)
-- Installation instructions for parallel
-- Notes both show clear progress tracking
-
-### 5. Provider Names
-- Changed "OpenAI/Codex" → "Codex" (line 253)
-- Consistent with actual CLI tool name
-- Matches rest of documentation
-
-### 6. Example Output Updates
-**Step 5 (Marker agents):**
-- Old: `[A1/7] [Student 1/5] (2.9%) |█░░░░░░░░░| Processing...`
-- New: `[ 14%] Completed 5/35 tasks`
-
-**Step 8 (Unifier agents):**
-- Old: `[Student 3/5] (60%) |██████████████░░░| Creating feedback...`
-- New: `[ 60%] Completed 3/5 tasks`
-
-**Step 5 detailed example:**
-Shows both parallel and xargs output formats:
-```
-Using GNU parallel for task execution
-[=====>                    ] 35% ETA: 2m 15s
-
-# Or with xargs:
-Using xargs for task execution
-[ 35%] Completed 78/224 tasks
+**Smart progress reporting:**
+```bash
+# Shows how many tasks were skipped vs. need to run
+Generated 28 marker tasks (skipped 196 already completed)
+All 224 marker tasks already completed
 ```
 
-### 7. Troubleshooting Section
-Added new subsections:
+**Example recovery workflow:**
+```bash
+# First run - 196/224 tasks complete before error
+./mark_structured.sh assignments/lab1
 
-**"xargs: command line cannot be assembled, too long":**
-- Notes this has been fixed
-- Explains the solution (line numbers instead of command lines)
+# Second run - automatically processes only the 28 failed tasks
+./mark_structured.sh assignments/lab1
+# Output: "Generated 28 marker tasks (skipped 196 already completed)"
+```
 
-**"Progress not showing or cryptic messages":**
-- Recommends installing GNU parallel
-- Shows xargs clear progress format
-- Mentions parallel uses `--bar` for clean display
+### 2. README.md Updates
 
-### 8. General Corrections
-- Renamed "LLM CLI errors" → "LLM CLI errors or permission issues"
-- More accurate section title
-- Covers broader troubleshooting scope
+**Added "Resume Options" section:**
+- Explains default resume behavior
+- Documents all three operational modes
+- Lists what gets preserved during resume
+- Provides guidance on when to use each mode
+- Includes practical recovery example
+
+**Content:**
+- What gets preserved (completed stages, tasks, schemes)
+- When to use each option (error recovery, regeneration, clean start)
+- Example showing 196/224 tasks preserved, 28 re-run
+
+### 3. Implementation Details
+
+**mark_structured.sh changes:**
+- Added `RESUME=true` (default), `--no-resume`, `--clean` argument parsing
+- Added resume checks before each stage
+- Modified marker task generation to check for existing output files
+- Modified unifier task generation to check for existing feedback files
+- Added skip counts and reporting
+- Conditional execution: only run parallel_runner if tasks exist
+
+**mark_freeform.sh changes:**
+- Same resume logic adapted for freeform workflow
+- Checks rubric.md and marking_criteria.md for Stage 2
+- Single scoring.md for Stage 4 (no per-activity)
+- Otherwise identical pattern to structured
+
+### 4. Error Handling Improvements
+
+**Graceful failure recovery:**
+- Tasks can fail without losing completed work
+- Re-running script only processes failed tasks
+- No need to manually track what completed
+- Preserves all successfully generated artifacts
+
+**Use cases:**
+- LLM API rate limiting (5-hour limits, daily quotas)
+- Network interruptions
+- Individual task failures (malformed notebooks)
+- User interruption (Ctrl+C)
+- System crashes or reboots
 
 ## Why These Changes Matter
 
-**User Experience:**
-- Examples now match actual output users will see
-- No confusion from outdated progress bar formats
-- Clear documentation of new features
+**Efficiency:**
+- Saves hours of redundant LLM processing
+- No need to wait for already-completed work to re-run
+- Critical for large assignments (224+ tasks)
 
-**Accuracy:**
-- Provider names consistent throughout
-- Progress formats reflect actual implementation
-- Examples show current behavior
+**Reliability:**
+- Graceful handling of partial failures
+- Can interrupt and resume anytime
+- Robust against transient errors
 
-**Discoverability:**
-- Users can find `--force-xargs` option
-- Shell wrapper prominently featured
-- Troubleshooting covers new fixes
+**Cost savings:**
+- Avoid re-running expensive LLM calls
+- Particularly important with paid API tiers
+- Matters for rate-limited free tiers
 
-**Completeness:**
-- Documents all recent improvements
-- Includes installation help for parallel
-- Explains execution method fallbacks
+**User experience:**
+- Clear feedback on what's being skipped
+- Progress preserved across sessions
+- Less frustration from errors
+
+## Common Use Case Example
+
+**Scenario:** Codex hits 5-hour usage limit at 53% completion (119/224 tasks)
+
+**Before resume capability:**
+- User must wait for limit reset
+- User must manually track completed students/activities
+- Re-running script processes all 224 tasks again
+- Wastes API quota on already-completed work
+
+**After resume capability:**
+```bash
+# Wait for limit reset at 3am
+# Then simply re-run same command
+./mark_structured.sh assignments/lab1
+
+# Output:
+# [INFO] Resume mode: Will skip completed stages and tasks
+# [INFO] Stage 1: Skipping (submissions manifest already exists)
+# [INFO] Stage 2: Skipping (activities already extracted)
+# [INFO] Stage 3: Skipping (rubric and marking criteria already exist)
+# [INFO] Generated 105 marker tasks (skipped 119 already completed)
+# [ 47%] Completed 50/105 tasks
+```
 
 ## Files Changed
 
-- **README.md**:
-  - Quick Start: Added debug options
-  - Generating overview: Added shell wrapper
-  - Progress Tracking: Updated to show new formats
-  - Parallel Execution: Added execution methods
-  - Provider names: Fixed "OpenAI/Codex" → "Codex"
-  - Examples: Updated to match current output
-  - Troubleshooting: Added ARG_MAX and progress sections
+- **mark_structured.sh**:
+  - Argument parsing: Added `RESUME`, `--no-resume`, `--clean`
+  - All stages: Added resume checks
+  - Stage 4 (Marker): Task generation skips existing outputs
+  - Stage 7 (Unifier): Task generation skips existing outputs
+  - Progress reporting: Shows skipped vs. running counts
+  - Conditional execution: Only run parallel_runner if tasks > 0
 
-- **dev/COMMIT_MESSAGE.txt**: Updated (this commit)
+- **mark_freeform.sh**:
+  - Same changes adapted for freeform workflow
+  - Stage 2: Check both rubric.md and marking_criteria.md
+  - Stage 4: Single scoring.md check
+
+- **README.md**:
+  - Added "Resume Options" section after "Debug Options"
+  - Documents default behavior, --no-resume, --clean
+  - Explains what gets preserved
+  - Provides usage guidance and recovery example
 
 ## Testing
 
-Verified all sections:
-✓ Quick Start examples work
-✓ create_overview.sh wrapper works
-✓ Progress formats match actual output
-✓ Troubleshooting steps are accurate
-✓ No broken links or references
-✓ Markdown formatting correct
+Verified resume functionality:
+✓ Skips completed stages correctly
+✓ Counts and reports skipped tasks accurately
+✓ Only generates tasks for missing outputs
+✓ --clean removes processed/ directory
+✓ --no-resume regenerates everything
+✓ Progress messages show skip counts
+✓ Works after LLM rate limit errors
+✓ Works after partial completion (119/224 done)
 
-README.md now accurately reflects the current state of the system and includes
-all recent improvements.
+Resume capability now fully operational for both structured and freeform assignments.

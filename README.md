@@ -26,6 +26,43 @@ An automated marking system for Jupyter notebook assignments using LLM agents co
 ./mark_freeform.sh assignments/your-assignment-name --force-xargs
 ```
 
+### Resume Options
+
+The marking scripts automatically resume from where they left off by default. If a stage or task has already been completed, it will be skipped.
+
+```bash
+# Resume from previous run (default behavior)
+./mark_structured.sh assignments/your-assignment-name
+
+# Start from scratch, ignoring previous progress
+./mark_structured.sh assignments/your-assignment-name --no-resume
+
+# Remove all processed files and start completely fresh
+./mark_structured.sh assignments/your-assignment-name --clean
+```
+
+**What gets preserved:**
+- Completed stages (e.g., submission discovery, activity extraction)
+- Completed marker tasks (e.g., 196 out of 224 students already marked)
+- Completed normalizer outputs
+- Approved marking schemes
+- Generated feedback files
+
+**When to use each option:**
+- **Default (resume)**: When errors occur mid-process or you want to continue after stopping
+- **`--no-resume`**: When you want to regenerate everything from existing processed files
+- **`--clean`**: When you want to completely start over (deletes `processed/` directory)
+
+**Example: Recovering from errors**
+```bash
+# First run - processes 196/224 students before error
+./mark_structured.sh assignments/lab1
+
+# Second run - only processes the 28 failed students
+./mark_structured.sh assignments/lab1
+# Output: "Generated 28 marker tasks (skipped 196 already completed)"
+```
+
 ## What This System Does
 
 This system semi-automates the marking of Jupyter notebook assignments through a multi-agent workflow:

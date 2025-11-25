@@ -19,13 +19,15 @@ def parse_scoring_markdown(filepath: Path) -> Dict[str, Any]:
     Parse a normalized scoring markdown file.
 
     Expected format:
-    # Mistake Table
-    | ID | Description | Frequency | Severity | Suggested Deduction |
-    |... |
+    ### Mistakes Table (or # Mistake Table)
+    | Mistake ID | Description | Frequency | Severity (1-10) | Suggested Deduction | Notes |
+    |------------|-------------|-----------|-----------------|---------------------|-------|
+    | M1 | ... | ... | ... | ... | ... |
 
-    # Positive Table
-    | ID | Description | Frequency | Quality | Suggested Bonus |
-    |... |
+    ### Positive Points Table (or # Positive Table)
+    | Positive ID | Description | Frequency | Quality (1-10) | Suggested Bonus | Notes |
+    |-------------|-------------|-----------|----------------|-----------------|-------|
+    | P1 | ... | ... | ... | ... | ... |
 
     Returns:
         Dict with 'mistakes' and 'positives' lists
@@ -36,54 +38,68 @@ def parse_scoring_markdown(filepath: Path) -> Dict[str, Any]:
     mistakes = []
     positives = []
 
-    # Parse mistakes table
+    # Parse mistakes table - more flexible pattern
     mistake_match = re.search(
-        r'# Mistake Table.*?\n\|(.*?)\|\n\|[-: |]+\|\n(.*?)(?=\n#|\Z)',
+        r'###?\s+Mistake.*?Table.*?\n\|.*?\|\n\|[-: |]+\|\n(.*?)(?=\n###?|\Z)',
         content,
-        re.DOTALL
+        re.DOTALL | re.IGNORECASE
     )
 
     if mistake_match:
-        headers = [h.strip() for h in mistake_match.group(1).split('|')]
-        rows = mistake_match.group(2).strip().split('\n')
+        rows = mistake_match.group(1).strip().split('\n')
 
         for row in rows:
             if not row.strip() or row.strip().startswith('#'):
                 continue
 
+            # Split by pipe and filter empty strings
             cells = [c.strip() for c in row.split('|')]
+            cells = [c for c in cells if c]  # Remove empty cells from leading/trailing pipes
+
             if len(cells) >= 5:
+                # Extract numeric values more robustly
+                frequency_str = cells[2].split('/')[0].strip()  # "18/24 students" -> "18"
+                severity_str = re.search(r'\d+', cells[3])  # Extract first number from "10 (Critical)"
+                deduction_str = re.search(r'\d+\.?\d*', cells[4])  # Extract number from "**13 marks**" or "**0.5 marks**"
+
                 mistakes.append({
                     'id': cells[0],
                     'description': cells[1],
-                    'frequency': int(cells[2]) if cells[2].isdigit() else 0,
-                    'severity': int(cells[3]) if cells[3].isdigit() else 5,
-                    'suggested_deduction': float(cells[4]) if cells[4].replace('.', '').isdigit() else 0.0
+                    'frequency': int(frequency_str) if frequency_str.isdigit() else 0,
+                    'severity': int(severity_str.group()) if severity_str else 5,
+                    'suggested_deduction': float(deduction_str.group()) if deduction_str else 0.0
                 })
 
-    # Parse positives table
+    # Parse positives table - more flexible pattern
     positive_match = re.search(
-        r'# Positive Table.*?\n\|(.*?)\|\n\|[-: |]+\|\n(.*?)(?=\n#|\Z)',
+        r'###?\s+Positive.*?Table.*?\n\|.*?\|\n\|[-: |]+\|\n(.*?)(?=\n###?|\Z)',
         content,
-        re.DOTALL
+        re.DOTALL | re.IGNORECASE
     )
 
     if positive_match:
-        headers = [h.strip() for h in positive_match.group(1).split('|')]
-        rows = positive_match.group(2).strip().split('\n')
+        rows = positive_match.group(1).strip().split('\n')
 
         for row in rows:
-            if not row.strip() or row.strip().startswith('#'):
+            if not row.strip() or row.strip().startswith('#') or row.strip().startswith('*'):
                 continue
 
+            # Split by pipe and filter empty strings
             cells = [c.strip() for c in row.split('|')]
+            cells = [c for c in cells if c]  # Remove empty cells from leading/trailing pipes
+
             if len(cells) >= 5:
+                # Extract numeric values more robustly
+                frequency_str = cells[2].split('/')[0].strip()  # "2/24 students" -> "2"
+                quality_str = re.search(r'\d+', cells[3])  # Extract first number from "10 (Excellent)"
+                bonus_str = re.search(r'\d+\.?\d*', cells[4])  # Extract number from "**+1 mark**" or "0 marks"
+
                 positives.append({
                     'id': cells[0],
                     'description': cells[1],
-                    'frequency': int(cells[2]) if cells[2].isdigit() else 0,
-                    'quality': int(cells[3]) if cells[3].isdigit() else 5,
-                    'suggested_bonus': float(cells[4]) if cells[4].replace('.', '').isdigit() else 0.0
+                    'frequency': int(frequency_str) if frequency_str.isdigit() else 0,
+                    'quality': int(quality_str.group()) if quality_str else 5,
+                    'suggested_bonus': float(bonus_str.group()) if bonus_str else 0.0
                 })
 
     return {

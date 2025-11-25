@@ -172,13 +172,24 @@ if command -v parallel &> /dev/null && [[ $FORCE_XARGS == false ]]; then
 
         PARALLEL_PID=$!
 
-        # Monitor progress
+        # Monitor progress with detailed information
         while kill -0 $PARALLEL_PID 2>/dev/null; do
             if [[ -n "$OUTPUT_DIR" ]]; then
                 # Count completed tasks by checking stdout files
                 COMPLETED=$(find "$OUTPUT_DIR" -name stdout -type f 2>/dev/null | wc -l | tr -d ' ')
                 PERCENT=$((COMPLETED * 100 / TOTAL_TASKS))
-                printf "\r\033[K[%3d%%] Completed %d/%d tasks" "$PERCENT" "$COMPLETED" "$TOTAL_TASKS" >&2
+
+                # Count errors (stderr files with content)
+                ERROR_COUNT=$(find "$OUTPUT_DIR" -name stderr -type f -size +0 2>/dev/null | wc -l | tr -d ' ')
+
+                # Build progress message
+                PROGRESS_MSG="[$PERCENT%] $COMPLETED/$TOTAL_TASKS tasks"
+
+                if [[ $ERROR_COUNT -gt 0 ]]; then
+                    PROGRESS_MSG="$PROGRESS_MSG (${ERROR_COUNT} errors)"
+                fi
+
+                printf "\r\033[K%s" "$PROGRESS_MSG" >&2
             fi
             sleep 0.5
         done
@@ -187,9 +198,15 @@ if command -v parallel &> /dev/null && [[ $FORCE_XARGS == false ]]; then
         wait $PARALLEL_PID
         EXIT_CODE=$?
 
-        # Final progress update
+        # Final progress update with error count
         COMPLETED=$TOTAL_TASKS
-        printf "\r\033[K[100%%] Completed %d/%d tasks\n\n" "$COMPLETED" "$TOTAL_TASKS" >&2
+        ERROR_COUNT=$(find "$OUTPUT_DIR" -name stderr -type f -size +0 2>/dev/null | wc -l | tr -d ' ')
+
+        if [[ $ERROR_COUNT -gt 0 ]]; then
+            printf "\r\033[K[100%%] %d/%d tasks (%d errors)\n\n" "$COMPLETED" "$TOTAL_TASKS" "$ERROR_COUNT" >&2
+        else
+            printf "\r\033[K[100%%] %d/%d tasks\n\n" "$COMPLETED" "$TOTAL_TASKS" >&2
+        fi
 
         # Show log output
         cat "$PARALLEL_LOG"
@@ -249,8 +266,19 @@ elif command -v xargs &> /dev/null; then
             local completed=$((current + 1))
             echo "$completed" > "$PROGRESS_COUNTER"
             local percent=$((completed * 100 / TOTAL_TASKS))
-            # Show progress on new line with clear separation (goes to stderr, separate from task output)
-            printf "\n[%3d%%] Completed %d/%d tasks\n\n" "$percent" "$completed" "$TOTAL_TASKS" >&2
+
+            # Count errors
+            local error_count=0
+            if [[ -n "$OUTPUT_DIR" ]]; then
+                error_count=$(find "$OUTPUT_DIR" -name stderr -type f -size +0 2>/dev/null | wc -l | tr -d ' ')
+            fi
+
+            # Show progress
+            if [[ $error_count -gt 0 ]]; then
+                printf "\n[%d%%] %d/%d tasks (%d errors)\n\n" "$percent" "$completed" "$TOTAL_TASKS" "$error_count" >&2
+            else
+                printf "\n[%d%%] %d/%d tasks\n\n" "$percent" "$completed" "$TOTAL_TASKS" >&2
+            fi
 
             # Release lock
             rmdir "$lockdir" 2>/dev/null
@@ -269,8 +297,8 @@ elif command -v xargs &> /dev/null; then
         }
         export -f task_with_progress
 
-        # Show initial progress with clear separation
-        printf "\n[  0%%] Completed 0/%d tasks\n\n" "$TOTAL_TASKS" >&2
+        # Show initial progress
+        printf "\n[0%%] 0/%d tasks\n" "$TOTAL_TASKS" >&2
 
         if [[ -n "$COMMAND" ]]; then
             seq 1 "$TOTAL_TASKS" | xargs -P "$CONCURRENCY" -I {} bash -c 'task_with_progress "{}" "'"$TASKS_FILE"'" "'"$OUTPUT_DIR"'" "'"$COMMAND"'"' || EXIT_CODE=$?
@@ -278,8 +306,15 @@ elif command -v xargs &> /dev/null; then
             seq 1 "$TOTAL_TASKS" | xargs -P "$CONCURRENCY" -I {} bash -c 'task_with_progress "{}" "'"$TASKS_FILE"'" "'"$OUTPUT_DIR"'" ""' || EXIT_CODE=$?
         fi
 
-        # Clean progress line and remove temp directory
-        echo "" >&2
+        # Show final status with error count
+        ERROR_COUNT=$(find "$OUTPUT_DIR" -name stderr -type f -size +0 2>/dev/null | wc -l | tr -d ' ')
+        if [[ $ERROR_COUNT -gt 0 ]]; then
+            printf "\n[100%%] %d/%d tasks (${ERROR_COUNT} errors)\n\n" "$TOTAL_TASKS" "$TOTAL_TASKS" >&2
+        else
+            printf "\n[100%%] %d/%d tasks\n\n" "$TOTAL_TASKS" "$TOTAL_TASKS" >&2
+        fi
+
+        # Clean up temp directory
         rm -rf "$PROGRESS_DIR"
     else
         # Non-verbose mode - no progress tracking

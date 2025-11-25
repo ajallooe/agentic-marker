@@ -417,22 +417,16 @@ if [[ $RESUME == true && -f "$GRADES_CSV" ]]; then
     log_info "Stage 7: Skipping (grades already generated)"
     log_success "Grades CSV: $GRADES_CSV"
 else
-    log_info "Stage 7: Running Aggregator Agent (Interactive)..."
+    log_info "Stage 7: Aggregating grades..."
 
-    AGGREGATOR_SESSION="$SESSIONS_DIR/aggregator.log"
-
-    python3 "$SRC_DIR/agents/aggregator.py" \
-        --assignment-name "$ASSIGNMENT_NAME" \
+    python3 "$SRC_DIR/aggregate_grades.py" \
         --feedback-dir "$FINAL_DIR" \
-        --output-dir "$FINAL_DIR" \
-        --session-log "$AGGREGATOR_SESSION" \
-        --provider "$DEFAULT_PROVIDER" \
-        ${MODEL_AGGREGATOR:+--model "$MODEL_AGGREGATOR"} \
-        --type freeform \
-        --total-marks "$TOTAL_MARKS"
+        --output "$GRADES_CSV" \
+        --total-marks "$TOTAL_MARKS" \
+        --type freeform
 
     if [[ $? -ne 0 ]]; then
-        log_error "Aggregator failed"
+        log_error "Grade aggregation failed"
         exit 1
     fi
 

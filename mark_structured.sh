@@ -337,11 +337,37 @@ for activity in $(seq 1 $NUM_ACTIVITIES); do
     else
         log_info "Normalizing Activity $activity..."
 
-        # TODO: Call normalizer agent with all markings for this activity
+        # Call normalizer agent to aggregate all markings for this activity
+        python3 "$SRC_DIR/agents/normalizer.py" \
+            --activity "A$activity" \
+            --markings-dir "$MARKINGS_DIR" \
+            --processed-dir "$PROCESSED_DIR" \
+            --output "$SCORING_OUTPUT" \
+            --provider "$DEFAULT_PROVIDER" \
+            ${DEFAULT_MODEL:+--model "$DEFAULT_MODEL"} \
+            --type structured
+
+        if [[ $? -ne 0 ]]; then
+            log_error "Normalizer failed for Activity $activity"
+            exit 1
+        fi
 
         log_success "Activity $activity normalized"
     fi
 done
+
+# Create combined scoring file for dashboard
+log_info "Creating combined scoring data..."
+python3 "$SRC_DIR/utils/combine_normalized.py" \
+    --normalized-dir "$NORMALIZED_DIR" \
+    --output "$NORMALIZED_DIR/combined_scoring.json"
+
+if [[ $? -ne 0 ]]; then
+    log_error "Failed to create combined scoring data"
+    exit 1
+fi
+
+log_success "Stage 5 complete"
 
 # ============================================================================
 # STAGE 6: Create Adjustment Dashboard

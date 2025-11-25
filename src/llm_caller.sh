@@ -156,15 +156,16 @@ call_codex() {
     if [[ "$mode" == "interactive" ]]; then
         # Interactive mode - Codex requires a real TTY
         # We cannot capture output without breaking the TTY requirement
+        # Enable workspace-write sandbox for file creation
         if [[ -n "$output" ]]; then
             echo "Note: Session will be saved to $output after completion" >&2
-            # Run codex interactively, then save output afterwards
+            # Run codex interactively with write permissions, then save output afterwards
             # Note: This won't capture the full session, just a marker
             echo "[Interactive session started at $(date)]" > "$output"
-            codex $model_arg "$prompt"
+            codex --sandbox workspace-write $model_arg "$prompt"
             echo "[Interactive session ended at $(date)]" >> "$output"
         else
-            codex $model_arg "$prompt"
+            codex --sandbox workspace-write $model_arg "$prompt"
         fi
     else
         # Headless mode - use 'exec' subcommand for non-interactive execution

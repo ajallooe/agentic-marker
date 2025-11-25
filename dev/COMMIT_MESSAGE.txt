@@ -1,151 +1,127 @@
-Improve progress messages for parallel and xargs execution
+Update README.md with recent improvements and corrections
 
-Replaced cryptic GNU parallel progress messages with a clear progress bar, and
-added real-time progress tracking for xargs with percentage and task counts.
+Updated README.md to reflect recent features and fixes, including improved
+progress tracking, create_overview.sh wrapper, --force-xargs option, and
+corrected provider names.
 
-## Problem
+## Changes Made
 
-**GNU parallel** was displaying cryptic messages like:
+### 1. Quick Start Section
+- Added "Debug Options" subsection
+- Documented `--force-xargs` flag for both marking scripts
+- Helps users test xargs fallback path
+
+### 2. Generating overview.md Section
+- Added `create_overview.sh` shell wrapper (recommended method)
+- Updated examples to use wrapper script
+- Still mentions Python direct call as alternative
+
+### 3. Progress Tracking Section
+**Before (outdated):**
 ```
-local:4/64/100%/6.3s
-```
-
-Which meant:
-- `local` - hostname
-- `4` - jobs running currently
-- `64` - jobs completed
-- `100%` - percentage complete
-- `6.3s` - time elapsed
-
-**xargs** had no progress tracking at all, making it impossible to see how many
-tasks were completed during long-running operations with hundreds of tasks.
-
-## Solution
-
-### GNU Parallel
-
-Replaced `--progress` flag with `--bar` for cleaner visual progress display:
-
-**Before:**
-```
-local:4/64/100%/6.3s
+[A2/7] [Student 15/42] (35.7%) |███████████░░░░░░░| Processing...
 ```
 
-**After:**
+**After (accurate):**
+- GNU parallel: "Visual progress bar with percentage and ETA"
+- xargs: `[ 45%] Completed 100/224 tasks`
+- Explains what information is shown
+- Notes real-time updates
+
+### 4. Parallel Execution Section
+- Added "Execution Methods" subsection
+- Documents GNU parallel (recommended)
+- Documents xargs (fallback)
+- Documents sequential (final fallback)
+- Installation instructions for parallel
+- Notes both show clear progress tracking
+
+### 5. Provider Names
+- Changed "OpenAI/Codex" → "Codex" (line 253)
+- Consistent with actual CLI tool name
+- Matches rest of documentation
+
+### 6. Example Output Updates
+**Step 5 (Marker agents):**
+- Old: `[A1/7] [Student 1/5] (2.9%) |█░░░░░░░░░| Processing...`
+- New: `[ 14%] Completed 5/35 tasks`
+
+**Step 8 (Unifier agents):**
+- Old: `[Student 3/5] (60%) |██████████████░░░| Creating feedback...`
+- New: `[ 60%] Completed 3/5 tasks`
+
+**Step 5 detailed example:**
+Shows both parallel and xargs output formats:
 ```
-[Progress bar display with ETA]
+Using GNU parallel for task execution
+[=====>                    ] 35% ETA: 2m 15s
+
+# Or with xargs:
+Using xargs for task execution
+[ 35%] Completed 78/224 tasks
 ```
 
-The `--bar` option provides a standard progress bar with clear percentage and
-time estimates.
+### 7. Troubleshooting Section
+Added new subsections:
 
-### xargs
+**"xargs: command line cannot be assembled, too long":**
+- Notes this has been fixed
+- Explains the solution (line numbers instead of command lines)
 
-Added custom progress tracking with atomic file locking:
+**"Progress not showing or cryptic messages":**
+- Recommends installing GNU parallel
+- Shows xargs clear progress format
+- Mentions parallel uses `--bar` for clean display
 
-**Display format:**
-```
-[  0%] Completed 0/224 tasks
-[ 12%] Completed 28/224 tasks
-[ 45%] Completed 100/224 tasks
-[100%] Completed 224/224 tasks
-```
+### 8. General Corrections
+- Renamed "LLM CLI errors" → "LLM CLI errors or permission issues"
+- More accurate section title
+- Covers broader troubleshooting scope
 
-**Implementation:**
-- Directory-based locking using `mkdir` (atomic on all Unix systems)
-- Portable across macOS and Linux (no flock dependency)
-- Updates in real-time as tasks complete
-- Progress shown on stderr to avoid mixing with task output
-- ANSI escape codes clear line before each update
+## Why These Changes Matter
 
-## Implementation Details
+**User Experience:**
+- Examples now match actual output users will see
+- No confusion from outdated progress bar formats
+- Clear documentation of new features
 
-**src/parallel_runner.sh:**
+**Accuracy:**
+- Provider names consistent throughout
+- Progress formats reflect actual implementation
+- Examples show current behavior
 
-1. **GNU parallel section:**
-   - Changed from `--progress` to `--bar`
-   - Filter out any remaining cryptic messages with `grep -v '^parallel:'`
-   - Capture exit code properly with `${PIPESTATUS[0]}`
+**Discoverability:**
+- Users can find `--force-xargs` option
+- Shell wrapper prominently featured
+- Troubleshooting covers new fixes
 
-2. **xargs section:**
-   - Created temporary directory for progress tracking files
-   - `update_progress()` function with atomic directory-based locking
-   - Wrapper function `task_with_progress()` that:
-     - Executes task via `execute_task_by_line()`
-     - Updates progress counter atomically
-     - Displays formatted progress to stderr
-   - Initial progress display showing 0%
-   - Final newline to preserve last progress message
-
-3. **Locking mechanism:**
-   - Uses `mkdir` for atomic lock acquisition (portable)
-   - Retry loop with 100 attempts and 0.01s sleep
-   - Skips update if lock can't be acquired (graceful degradation)
-   - Releases lock with `rmdir` after update
-   - No dependency on flock/lockfile commands
-
-4. **Display format:**
-   - `\r` - carriage return to beginning of line
-   - `\033[K` - ANSI escape to clear from cursor to end of line
-   - `[%3d%%]` - percentage with padding
-   - `Completed %d/%d tasks` - current/total count
-   - Output to stderr (`>&2`) to separate from task stdout
-
-## Testing
-
-✓ **GNU parallel** with `--bar` (cleaner progress bar)
-✓ **xargs** shows real-time progress: `[  0%] Completed 0/5 tasks`
-✓ **Progress updates** atomically without race conditions
-✓ **Directory locking** works on macOS (no flock needed)
-✓ **5 tasks** complete successfully with progress tracking
-✓ **ANSI codes** work in real terminals (clear line updates)
-✓ **Final message** preserved with newline
-
-**Example output (xargs):**
-```
-Using xargs for task execution (forced via --force-xargs)
-
-[  0%] Completed 0/5 tasks
-[ 40%] Completed 2/5 tasks
-[ 80%] Completed 4/5 tasks
-[100%] Completed 5/5 tasks
-
-====================
-✓ All 5 tasks completed successfully
-```
+**Completeness:**
+- Documents all recent improvements
+- Includes installation help for parallel
+- Explains execution method fallbacks
 
 ## Files Changed
 
-- **src/parallel_runner.sh**:
-  - GNU parallel: Changed to `--bar`, filter messages, fix exit code
-  - xargs: Added progress tracking with atomic locking
-  - Created `update_progress()` and `task_with_progress()` functions
-  - Export variables for progress tracking
-  - Clean up temp directory on completion
+- **README.md**:
+  - Quick Start: Added debug options
+  - Generating overview: Added shell wrapper
+  - Progress Tracking: Updated to show new formats
+  - Parallel Execution: Added execution methods
+  - Provider names: Fixed "OpenAI/Codex" → "Codex"
+  - Examples: Updated to match current output
+  - Troubleshooting: Added ARG_MAX and progress sections
 
 - **dev/COMMIT_MESSAGE.txt**: Updated (this commit)
 
-## Benefits
+## Testing
 
-**User Experience:**
-- **Clear progress**: See exactly how many tasks completed out of total
-- **Percentage**: Quick visual indication of overall progress
-- **Consistency**: Both parallel and xargs now show progress
-- **Professional**: No more cryptic messages
+Verified all sections:
+✓ Quick Start examples work
+✓ create_overview.sh wrapper works
+✓ Progress formats match actual output
+✓ Troubleshooting steps are accurate
+✓ No broken links or references
+✓ Markdown formatting correct
 
-**Technical:**
-- **Portable**: Works on macOS and Linux without external dependencies
-- **Atomic**: Directory-based locking prevents race conditions
-- **Robust**: Graceful degradation if lock can't be acquired
-- **Efficient**: Minimal overhead per task completion
-
-**For large assignments:**
-With 224 tasks (7 activities × 32 students), users can now see:
-```
-[ 45%] Completed 100/224 tasks
-```
-
-Instead of wondering if the process is still running.
-
-This improvement makes long-running marking workflows much more transparent and
-gives users confidence that the system is making progress.
+README.md now accurately reflects the current state of the system and includes
+all recent improvements.

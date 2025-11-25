@@ -18,6 +18,14 @@ An automated marking system for Jupyter notebook assignments using LLM agents co
 ./mark_freeform.sh assignments/your-assignment-name
 ```
 
+### Debug Options
+
+```bash
+# Force use of xargs instead of GNU parallel (for testing)
+./mark_structured.sh assignments/your-assignment-name --force-xargs
+./mark_freeform.sh assignments/your-assignment-name --force-xargs
+```
+
 ## What This System Does
 
 This system semi-automates the marking of Jupyter notebook assignments through a multi-agent workflow:
@@ -107,9 +115,13 @@ total_marks: 100
 
 ## Generating overview.md Automatically
 
-You can automatically generate an `overview.md` file from an existing Jupyter notebook using the `create_overview.py` utility:
+You can automatically generate an `overview.md` file from an existing Jupyter notebook using the overview generator:
 
 ```bash
+# Using the shell wrapper (recommended)
+./create_overview.sh <notebook_path> --model <model_name>
+
+# Or call Python directly
 python3 src/create_overview.py <notebook_path> --model <model_name>
 ```
 
@@ -117,13 +129,13 @@ python3 src/create_overview.py <notebook_path> --model <model_name>
 
 ```bash
 # Using Claude Sonnet
-python3 src/create_overview.py assignments/lab1/notebook.ipynb --model claude-sonnet-4-5
+./create_overview.sh assignments/lab1/notebook.ipynb --model claude-sonnet-4-5
 
 # Using Gemini
-python3 src/create_overview.py assignments/lab2/notebook.ipynb --model gemini-2.5-pro
+./create_overview.sh assignments/lab2/notebook.ipynb --model gemini-2.5-pro
 
 # Using Codex
-python3 src/create_overview.py assignments/lab3/notebook.ipynb --model gpt-5.1
+./create_overview.sh assignments/lab3/notebook.ipynb --model gpt-5.1
 ```
 
 **What it does:**
@@ -176,11 +188,21 @@ The system maintains state in `processed/logs/state.json`:
 
 ## Progress Tracking
 
-Real-time console output shows:
+The system provides clear, real-time progress tracking during parallel execution:
 
+**With GNU parallel (recommended):**
+- Visual progress bar with percentage and ETA
+- Clean, easy-to-read format
+
+**With xargs (fallback):**
 ```text
-[A2/7] [Student 15/42] (35.7%) |███████████░░░░░░░| Processing Alice Smith...
+[ 45%] Completed 100/224 tasks
 ```
+
+Progress updates show:
+- Current percentage complete
+- Number of tasks completed vs. total
+- Updates in real-time as tasks finish
 
 ## Output Files
 
@@ -214,13 +236,21 @@ Adjust `max_parallel` in `overview.md` to control concurrency:
 - Unifier agents: One per student
 - Recommendation: Set to number of CPU cores
 
+**Execution Methods:**
+
+- **GNU parallel** (recommended): Install with `brew install parallel` on macOS or `apt install parallel` on Linux
+- **xargs** (fallback): Built into all Unix systems, automatically used if parallel not available
+- **Sequential** (fallback): Used only if neither parallel nor xargs available
+
+Both parallel and xargs show clear progress tracking with percentages and task counts.
+
 ## Using Different LLM Providers
 
 The system supports multiple providers via CLI:
 
 - **Claude Code**: `claude` command (default)
 - **Gemini**: `gemini` command (requires Gemini CLI)
-- **OpenAI/Codex**: `codex` command (requires Codex CLI)
+- **Codex**: `codex` command (requires Codex CLI)
 
 ### Available Providers and Models
 
@@ -350,7 +380,7 @@ codex exec "test"
 
 - Check `processed/logs/errors_*.json`
 
-### LLM CLI errors (e.g., "Error: 'i'" or command not found)
+### LLM CLI errors or permission issues
 
 - Verify the CLI tool is installed: `which claude codex gemini`
 - Test the CLI directly: `codex exec "test"` or `claude --print "test"`
@@ -358,6 +388,19 @@ codex exec "test"
 - For Codex: use `codex` (not `openai`) as the command name
 - Review individual agent logs in `processed/logs/*/`
 - Verify LLM CLI tools are working: `claude --version`
+
+### "xargs: command line cannot be assembled, too long"
+
+This has been fixed. If you see this error:
+
+- Update to the latest version of the code
+- The system now uses line numbers instead of full command lines to avoid ARG_MAX limits
+
+### Progress not showing or cryptic messages
+
+- Install GNU parallel for best experience: `brew install parallel` (macOS) or `apt install parallel` (Linux)
+- xargs fallback now shows clear progress: `[ 45%] Completed 100/224 tasks`
+- Parallel progress uses `--bar` for clean visual display
 
 ## Development
 
@@ -492,7 +535,12 @@ The system will proceed through multiple stages (detailed below).
 **Example output**:
 
 ```text
-[A2/7] [Student 15/42] (35.7%) |███████████░░░░░░░| Processing Alice Smith...
+Using GNU parallel for task execution
+[=====>                    ] 35% ETA: 2m 15s
+
+# Or with xargs:
+Using xargs for task execution
+[ 35%] Completed 78/224 tasks
 ```
 
 **Files created**:
@@ -642,7 +690,7 @@ cp ~/Downloads/student_submissions/*.ipynb assignments/lab2/submissions/section-
 # - Type /exit when done
 
 # 5. Marker agents (automatic)
-# [A1/7] [Student 1/5] (2.9%) |█░░░░░░░░░| Processing John Doe...
+# [ 14%] Completed 5/35 tasks
 # ... wait for all students ...
 
 # 6. Normalizer (automatic)
@@ -657,7 +705,7 @@ jupyter notebook assignments/lab2/processed/adjustment_dashboard.ipynb
 # - Press Enter in terminal
 
 # 8. Unifier agents (automatic)
-# [Student 3/5] (60%) |██████████████░░░| Creating feedback for Jane Smith...
+# [ 60%] Completed 3/5 tasks
 # ... wait for all students ...
 
 # 9. Aggregator (interactive)

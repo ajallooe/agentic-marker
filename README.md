@@ -32,8 +32,7 @@ This system semi-automates the marking of Jupyter notebook assignments through a
 ## Prerequisites
 
 - Python 3.8+
-- Claude Code CLI (`claude` command)
-- Optional: Gemini CLI, OpenAI CLI
+- One or more LLM CLI tools: Claude Code (`claude`), Gemini CLI (`gemini`), or Codex CLI (`codex`)
 - Optional but recommended: GNU Parallel, jq
 
 ## Installation
@@ -179,15 +178,37 @@ Adjust `max_parallel` in `overview.md` to control concurrency:
 
 The system supports multiple providers via CLI:
 
-- Claude Code: `claude` (default)
-- Gemini: Requires Gemini CLI installed
-- OpenAI: Requires OpenAI CLI installed
+- **Claude Code**: `claude` command (default)
+- **Gemini**: `gemini` command (requires Gemini CLI)
+- **OpenAI/Codex**: `codex` command (requires Codex CLI)
 
 Specify in `overview.md`:
 
 ```markdown
 default_provider: gemini
 default_model: gemini-2.0-flash
+```
+
+Or for OpenAI:
+
+```markdown
+default_provider: codex
+default_model: gpt-5.1
+```
+
+### Verify CLI Tools
+
+Test each provider:
+
+```bash
+# Test Claude
+claude --print "test"
+
+# Test Gemini
+gemini "test"
+
+# Test Codex
+codex exec "test"
 ```
 
 ## Troubleshooting
@@ -213,6 +234,13 @@ default_model: gemini-2.0-flash
 ### Agents failing
 
 - Check `processed/logs/errors_*.json`
+
+### LLM CLI errors (e.g., "Error: 'i'" or command not found)
+
+- Verify the CLI tool is installed: `which claude codex gemini`
+- Test the CLI directly: `codex exec "test"` or `claude --print "test"`
+- Ensure the provider name in `overview.md` matches the installed CLI tool
+- For Codex: use `codex` (not `openai`) as the command name
 - Review individual agent logs in `processed/logs/*/`
 - Verify LLM CLI tools are working: `claude --version`
 

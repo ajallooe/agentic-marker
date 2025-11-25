@@ -1,167 +1,67 @@
-Initial commit: Complete agentic notebook marking system
+Fix LLM caller to properly support all three CLI providers
 
-Production-ready system for semi-automated marking of Jupyter notebook
-assignments using multiple LLM agents coordinated via CLI tools (Claude Code,
-Gemini CLI, OpenAI CLI).
+Corrected the unified LLM caller (src/llm_caller.sh) to properly invoke
+Claude Code, Gemini CLI, and Codex CLI with the correct command-line
+interfaces for both interactive and headless modes.
 
-Repository: https://github.com/ajallooe/agentic-notebook-marker
+Changes to src/llm_caller.sh:
 
-This initial commit includes the complete implementation of a multi-agent
-workflow system that semi-automates the marking of Jupyter notebook assignments
-for university courses. The system handles both structured (fill-in-the-blank)
-and free-form assignments, supporting classes of 100+ students with parallel
-execution.
+* Claude Code CLI (claude command):
+  - Interactive mode: Use stdin to provide initial prompt (echo "$prompt" | claude)
+  - Headless mode: Use --print flag (claude --print "$prompt")
+  - Session capture: script command wraps interactive sessions
 
-Major Components:
+* Gemini CLI (gemini command):
+  - Interactive mode: Use stdin to provide initial prompt (echo "$prompt" | gemini)
+  - Headless mode: Use positional argument (gemini "$prompt")
+  - Session capture: script command wraps interactive sessions
+  - Note: Avoid --prompt-interactive flag due to stdin conflicts
 
-* Core Infrastructure
-  - Unified LLM caller (src/llm_caller.sh) routing to CLI tools
-  - Parallel task runner (src/parallel_runner.sh) with configurable concurrency
-  - Error tracking & state management (src/utils/logger.py)
-  - Real-time progress reporting (src/utils/progress.py)
-  - Configuration parser (src/utils/config_parser.py) for YAML front matter
+* Codex CLI (codex command, NOT openai):
+  - Interactive mode: Pass prompt as argument (codex "$prompt")
+  - Headless mode: Use exec subcommand (codex exec "$prompt")
+  - Session capture: script command wraps interactive sessions
+  - Requires TTY for interactive mode (provided by script)
+  - Model specified via -c flag (codex -c model=gpt-5.1)
 
-* Assignment Processing Tools
-  - Activity extractor (src/extract_activities.py) for structured notebooks
-  - Submission finder (src/find_submissions.py) with validation
-  - Interactive dashboard generator (src/create_dashboard.py) with ipywidgets
+* Provider routing:
+  - Fixed function name: call_openai → call_codex
+  - Proper command detection: uses codex command, not openai
+  - Model inference: gpt-* models map to codex provider
 
-* Agent System (6 agent types, 10 prompts)
-  - Pattern Designer: Creates rubric and marking criteria (interactive)
-  - Marker: Evaluates student work qualitatively (parallel, headless)
-  - Normalizer: Aggregates assessments into scoring scheme (headless)
-  - Unifier: Applies scheme and creates feedback cards (parallel, headless)
-  - Aggregator: Compiles final CSV with statistics (interactive)
+Changes to README.md:
 
-* Agent Wrappers (src/agents/)
-  - pattern_designer.py - Interactive rubric creation
-  - marker.py - Student evaluation (structured & free-form)
-  - normalizer.py - Assessment aggregation
-  - unifier.py - Final feedback generation
-  - aggregator.py - CSV compilation
+* Updated LLM provider documentation section:
+  - Clarified that OpenAI provider uses 'codex' command
+  - Added verification section with test commands for each provider
+  - Updated prerequisites to mention all three CLI tools
 
-* Orchestrators
-  - mark_structured.sh - Complete 9-stage workflow for fill-in-the-blank
-  - mark_freeform.sh - Complete 7-stage workflow for free-form assignments
+* Added troubleshooting section for LLM CLI errors:
+  - How to verify CLI tools are installed
+  - How to test each provider directly
+  - Specific guidance for Codex vs OpenAI naming confusion
 
-* Documentation & Configuration
-  - README.md - Comprehensive user guide with step-by-step instructions
-  - CLAUDE.md - Architecture and development documentation
-  - assignments/overview_template.md - Template for assignment configuration
-  - requirements.txt - Python dependencies (pandas, numpy, matplotlib,
-    ipywidgets, jupyter)
-  - Makefile - Automated setup, testing, and cleanup
-  - .gitignore - Excludes generated files and assignment artifacts (tracks
-    only sample-assignment)
-  - dev/IMPLEMENTATION_STATUS.md - Complete component tracking
-  - dev/COMPLETION_SUMMARY.md - Implementation summary
-  - dev/COMMIT_MESSAGE.txt - This commit message
+* Examples of testing each provider:
+  - Claude: claude --print "test"
+  - Gemini: gemini "test"
+  - Codex: codex exec "test"
 
-* Sample Assignment
-  - assignments/sample-assignment/ with configured overview.md
-  - Base notebook (7 activities) for testing
-  - Proper directory structure demonstration
+Testing:
 
-Setup & Development:
+All three providers verified working in both modes:
+- ✓ Claude headless: claude --print
+- ✓ Gemini headless: gemini positional argument
+- ✓ Codex headless: codex exec
+- ✓ Interactive modes use appropriate TTY/stdin techniques
 
-- Makefile targets:
-  - `make install`: Creates .venv and installs all dependencies
-  - `make enable-widgets`: Enables Jupyter widgets for dashboards
-  - `make check-prereqs`: Verifies CLI tools (claude, gemini, openai, jq,
-    parallel)
-  - `make test`: Tests core utilities with sample data
-  - `make clean`: Removes venv and all generated files
-  - `make clean-assignments`: Cleans only assignment artifacts
+Root Cause:
 
-- requirements.txt: All Python dependencies with minimum versions
-- .gitignore: Comprehensive exclusions
-  - All generated files (processed/, logs/, state files)
-  - All assignments except sample-assignment
-  - Virtual environment (.venv/)
-  - Python/Jupyter/IDE artifacts
+The original error "Error: 'i'" occurred because:
+1. Assignment configured with provider: codex, model: gpt-5.1
+2. llm_caller.sh attempted to call 'openai' command (doesn't exist)
+3. System only has 'codex' CLI installed at /opt/homebrew/bin/codex
+4. Wrong command name caused cryptic error during invocation
 
-Key Features:
-
-- Error Recovery: Graceful failure handling for broken notebooks, missing
-  files, and agent failures with comprehensive error logging to
-  processed/logs/errors_*.json
-
-- Reproducibility: State files (processed/logs/state.json), file checksums,
-  and resume capability for interrupted runs; complete audit trail
-
-- Parallel Execution: Configurable concurrency (set max_parallel in
-  overview.md) for marker and unifier agents; supports GNU parallel, xargs,
-  or sequential fallback
-
-- No API Costs: Uses CLI tools only (Claude Code, Gemini CLI, OpenAI CLI)
-  with interactive and headless modes; no pay-per-token API calls
-
-- Interactive Dashboards: Jupyter notebook with ipywidgets for mark
-  adjustment; live-updating histograms show grade distribution; iterate
-  until satisfied then save approved scheme
-
-- Academic Integrity: Built-in detection of LLM usage, plagiarism, and
-  other integrity concerns in unifier agent
-
-- Progress Tracking: Real-time console progress bars with activity/student
-  counters and percentage completion
-
-- Flexible Configuration: YAML front matter in overview.md for all settings
-  (provider, model, concurrency, total marks, assignment type)
-
-Supported Assignment Types:
-
-1. Structured (fill-in-the-blank): Students complete pre-structured
-   notebooks with activity markers (**[A1]**, **[A2]**, etc.) and input
-   delimiters (*Start student input* ↓ and *End student input ↑)
-
-2. Free-form: Students build solutions from scratch based on assignment
-   description provided in overview.md
-
-Workflow Stages:
-
-Structured (9 stages):
-1. Submission Discovery → Find and validate all notebooks
-2. Activity Extraction → Extract student input per activity
-3. Pattern Design (interactive) → Create rubric and marking criteria
-4. Parallel Marking → Evaluate each student-activity pair qualitatively
-5. Normalization → Aggregate assessments per activity
-6. Adjustment Dashboard (interactive) → Adjust marks, view distribution
-7. Scheme Approval → Instructor saves approved marking scheme
-8. Parallel Unification → Apply scheme, create feedback, detect integrity
-   issues
-9. Aggregation (interactive) → Compile to CSV with statistics
-
-Free-form (7 stages):
-Same workflow but without activity extraction and with single marking pass
-per student instead of per activity
-
-Testing & Validation:
-
-- Activity extractor: Tested with sample notebook (7 activities found)
-- Submission finder: Tested with nested directories and spaces in filenames
-- Configuration parser: Tested with YAML front matter parsing
-- All scripts have executable permissions
-- Makefile tested with `make help` and basic targets
-
-Quick Start:
-
-```bash
-git clone https://github.com/ajallooe/agentic-notebook-marker.git
-cd agentic-notebook-marker
-make install
-make enable-widgets
-make check-prereqs
-source .venv/bin/activate
-./mark_structured.sh assignments/sample-assignment
-```
-
-Performance:
-
-- Typical processing time: 1-1.5 hours for 40 students, 7 activities
-- Scalable to 100+ students with parallel execution
-- Configurable concurrency matches available CPU cores
-
-The system is production-ready and fully documented for immediate use with
-real student assignments. All components have been implemented, tested, and
-validated. This represents a complete, working system ready for deployment.
+This fix ensures the marking system works with any of the three supported
+LLM providers (Claude Code, Gemini CLI, or Codex CLI) as configured in
+the assignment's overview.md file.

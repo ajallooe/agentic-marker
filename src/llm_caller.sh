@@ -71,37 +71,28 @@ call_claude() {
     local prompt="$1"
     local mode="$2"
     local output="$3"
+    local model="${MODEL}"
+
+    # Build model argument if specified
+    local model_arg=""
+    if [[ -n "$model" ]]; then
+        model_arg="--model $model"
+    fi
 
     if [[ "$mode" == "interactive" ]]; then
-        # Interactive mode with session capture
+        # Interactive mode - use stdin to provide initial prompt
         if [[ -n "$output" ]]; then
             # Use script to capture the session
-            script -q "$output" bash -c "echo '$prompt' | claude"
+            script -q "$output" bash -c "echo '$prompt' | claude $model_arg"
         else
-            echo "$prompt" | claude
+            echo "$prompt" | claude $model_arg
         fi
     else
-        # Headless mode - use claude with piped input and capture output
-        # Note: Claude Code may not have a pure headless mode, so we simulate it
+        # Headless mode - use --print for non-interactive output
         if [[ -n "$output" ]]; then
-            # Create a temporary expect script to automate the interaction
-            local temp_expect=$(mktemp)
-            cat > "$temp_expect" <<EOF
-#!/usr/bin/env expect -f
-set timeout -1
-spawn claude
-expect ">"
-send "$prompt\r"
-expect ">"
-send "/exit\r"
-expect eof
-EOF
-            chmod +x "$temp_expect"
-            "$temp_expect" > "$output" 2>&1
-            rm "$temp_expect"
+            claude --print $model_arg "$prompt" > "$output" 2>&1
         else
-            echo "Warning: Headless mode without output file not fully supported for Claude" >&2
-            echo "$prompt" | claude
+            claude --print $model_arg "$prompt"
         fi
     fi
 }
@@ -111,57 +102,70 @@ call_gemini() {
     local prompt="$1"
     local mode="$2"
     local output="$3"
-    local model="${MODEL:-gemini-pro}"
+    local model="${MODEL}"
 
     # Check if gemini CLI is available
     if ! command -v gemini &> /dev/null; then
         echo "Error: gemini CLI not found. Please install it first." >&2
-        echo "You may need to install: pip install google-generativeai-cli or similar" >&2
         exit 1
     fi
 
+    # Build model argument if specified
+    local model_arg=""
+    if [[ -n "$model" ]]; then
+        model_arg="--model $model"
+    fi
+
     if [[ "$mode" == "interactive" ]]; then
+        # Interactive mode - use stdin to provide initial prompt
         if [[ -n "$output" ]]; then
-            script -q "$output" bash -c "gemini chat --model '$model' <<< '$prompt'"
+            script -q "$output" bash -c "echo '$prompt' | gemini $model_arg"
         else
-            gemini chat --model "$model" <<< "$prompt"
+            echo "$prompt" | gemini $model_arg
         fi
     else
-        # Headless mode
+        # Headless mode - use positional prompt for one-shot execution
         if [[ -n "$output" ]]; then
-            gemini generate --model "$model" "$prompt" > "$output" 2>&1
+            gemini $model_arg "$prompt" > "$output" 2>&1
         else
-            gemini generate --model "$model" "$prompt"
+            gemini $model_arg "$prompt"
         fi
     fi
 }
 
-# Function to call OpenAI CLI (Codex)
-call_openai() {
+# Function to call Codex CLI
+call_codex() {
     local prompt="$1"
     local mode="$2"
     local output="$3"
-    local model="${MODEL:-gpt-4}"
+    local model="${MODEL}"
 
-    # Check if openai CLI is available
-    if ! command -v openai &> /dev/null; then
-        echo "Error: openai CLI not found. Please install it first." >&2
-        echo "Install with: pip install openai-cli or similar" >&2
+    # Check if codex CLI is available
+    if ! command -v codex &> /dev/null; then
+        echo "Error: codex CLI not found. Please install it first." >&2
         exit 1
     fi
 
+    # Build model config if specified
+    local model_arg=""
+    if [[ -n "$model" ]]; then
+        model_arg="-c model=$model"
+    fi
+
     if [[ "$mode" == "interactive" ]]; then
+        # Interactive mode - pass prompt as argument
         if [[ -n "$output" ]]; then
-            script -q "$output" bash -c "openai chat --model '$model' <<< '$prompt'"
+            # Use script to capture the session
+            script -q "$output" bash -c "codex $model_arg '$prompt'"
         else
-            openai chat --model "$model" <<< "$prompt"
+            codex $model_arg "$prompt"
         fi
     else
-        # Headless mode
+        # Headless mode - use 'exec' subcommand for non-interactive execution
         if [[ -n "$output" ]]; then
-            openai complete --model "$model" "$prompt" > "$output" 2>&1
+            codex exec $model_arg "$prompt" > "$output" 2>&1
         else
-            openai complete --model "$model" "$prompt"
+            codex exec $model_arg "$prompt"
         fi
     fi
 }
@@ -175,10 +179,10 @@ case "$PROVIDER" in
         call_gemini "$PROMPT" "$MODE" "$OUTPUT_FILE"
         ;;
     openai|codex)
-        call_openai "$PROMPT" "$MODE" "$OUTPUT_FILE"
+        call_codex "$PROMPT" "$MODE" "$OUTPUT_FILE"
         ;;
     *)
-        echo "Error: Unknown provider '$PROVIDER'. Supported: claude, gemini, openai" >&2
+        echo "Error: Unknown provider '$PROVIDER'. Supported: claude, gemini, codex" >&2
         exit 1
         ;;
 esac

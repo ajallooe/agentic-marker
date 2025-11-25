@@ -1,0 +1,18 @@
+# System-wide Configuration for Agentic Notebook Marker
+# These are fallback defaults when not specified in assignment overview.md
+
+# Default LLM Provider
+# Options: claude, gemini, codex
+default_provider: claude
+
+# Default Model (optional - provider will use its default if not specified)
+# Claude models: claude-sonnet-4, claude-opus-4, claude-haiku-4
+# Gemini models: gemini-2.0-flash-exp, gemini-1.5-pro, gemini-1.5-flash
+# Codex models: gpt-4o, gpt-5.1, o1, o1-mini
+default_model:
+
+# Parallel execution settings
+max_parallel: 4
+
+# Logging settings
+verbose: true

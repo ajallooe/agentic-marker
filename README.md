@@ -112,6 +112,38 @@ pip install -r requirements.txt
 jupyter nbextension enable --py widgetsnbextension
 ```
 
+## System Configuration
+
+### Global Defaults (`config.yaml`)
+
+The system-wide configuration file defines fallback defaults for all assignments:
+
+```yaml
+# config.yaml (at project root)
+default_provider: claude    # Options: claude, gemini, codex
+default_model:              # Optional: specific model (e.g., gpt-5.1, claude-sonnet-4)
+max_parallel: 4             # Number of parallel tasks
+verbose: true               # Enable detailed logging
+```
+
+**Configuration hierarchy:**
+1. **Assignment-specific** (`assignments/*/overview.md`) - highest priority
+2. **System-wide** (`config.yaml`) - fallback defaults
+3. **Hardcoded fallbacks** - if config.yaml is missing
+
+**Example:**
+```yaml
+# config.yaml - your preferred defaults
+default_provider: codex
+default_model: gpt-5.1
+
+# assignments/lab1/overview.md - override for this assignment only
+default_provider: gemini
+default_model: gemini-2.0-flash-exp
+```
+
+This assignment will use Gemini, while others use Codex by default.
+
 ## Assignment Structure
 
 Create your assignment directory as follows:

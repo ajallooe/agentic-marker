@@ -56,14 +56,21 @@ if [[ -z "$PROVIDER" && -n "$MODEL" ]]; then
         PROVIDER="claude"
     elif [[ "$MODEL" == gemini-* ]]; then
         PROVIDER="gemini"
-    elif [[ "$MODEL" == gpt-* ]]; then
-        PROVIDER="openai"
+    elif [[ "$MODEL" == gpt-* || "$MODEL" == o1* ]]; then
+        PROVIDER="codex"
     fi
 fi
 
-# Default to claude if still not specified
+# Default from config.yaml if still not specified
 if [[ -z "$PROVIDER" ]]; then
-    PROVIDER="claude"
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    DEFAULT_PROVIDER=$(python3 "$SCRIPT_DIR/utils/get_default_provider.py" 2>/dev/null)
+    if [[ -n "$DEFAULT_PROVIDER" ]]; then
+        PROVIDER="$DEFAULT_PROVIDER"
+    else
+        # Final fallback
+        PROVIDER="claude"
+    fi
 fi
 
 # Function to call Claude Code CLI

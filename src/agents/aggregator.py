@@ -10,6 +10,10 @@ import subprocess
 import sys
 from pathlib import Path
 
+# Import utilities
+sys.path.insert(0, str(Path(__file__).parent.parent / "utils"))
+from system_config import get_default_provider, get_default_model
+
 
 def load_prompt_template() -> str:
     """Load the aggregator prompt template."""
@@ -58,12 +62,13 @@ def main():
     )
     parser.add_argument(
         "--provider",
-        default="claude",
-        help="LLM provider"
+        default=get_default_provider(),
+        help=f"LLM provider (default: {get_default_provider()} from config.yaml)"
     )
     parser.add_argument(
         "--model",
-        help="LLM model"
+        default=get_default_model(),
+        help="LLM model (default from config.yaml)"
     )
     parser.add_argument(
         "--type",

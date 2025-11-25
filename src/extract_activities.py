@@ -264,7 +264,7 @@ def extract_from_notebook(
 
     # Validate structure
     is_valid, warnings = extractor.validate_structure()
-    errors = extractor.get_errors() + warnings
+    errors = extractor.get_errors()  # Don't include warnings in errors
 
     # Save if output directory specified
     if output_dir and activities:
@@ -273,8 +273,12 @@ def extract_from_notebook(
         except Exception as e:
             errors.append(f"Could not save activities: {e}")
 
-    success = is_valid and len(extractor.get_errors()) == 0
-    return success, activities, errors
+    # Success means no fatal errors (warnings are okay)
+    success = len(errors) == 0 and len(activities) > 0
+
+    # Combine errors and warnings for reporting
+    all_issues = errors + warnings
+    return success, activities, all_issues
 
 
 def main():
@@ -312,11 +316,11 @@ def main():
 
     # Print results
     if errors:
-        print("Errors/Warnings:", file=sys.stderr)
+        print("Warnings:", file=sys.stderr)
         for error in errors:
             print(f"  - {error}", file=sys.stderr)
 
-    if args.summary or not success:
+    if args.summary or not success or errors:
         extractor = ActivityExtractor(args.notebook)
         extractor.load_notebook()
         extractor.extract_activities()
@@ -328,10 +332,13 @@ def main():
                   f"({info['code_cells']} code, {info['markdown_cells']} markdown)")
 
     if success:
-        print(f"\n✓ Successfully extracted {len(activities)} activities")
+        if errors:
+            print(f"\n✓ Successfully extracted {len(activities)} activities (with {len(errors)} warnings)")
+        else:
+            print(f"\n✓ Successfully extracted {len(activities)} activities")
         sys.exit(0)
     else:
-        print(f"\n✗ Extraction failed with {len(errors)} errors")
+        print(f"\n✗ Extraction failed")
         sys.exit(1)
 
 

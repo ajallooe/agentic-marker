@@ -163,8 +163,6 @@ AREAS FOR IMPROVEMENT:
 • [Point 1 with specific advice]
 • [Point 2 with specific advice]
 • [Point 3 with specific advice]
-
-{additional_comments_if_any}
 ```
 
 ## Important Guidelines

@@ -3,7 +3,7 @@
 Combine normalized scoring files into combined JSON for dashboard.
 
 Reads all A*_scoring.md files and creates:
-- combined_scoring.json: Aggregated mistakes/positives across all activities
+- combined_scoring.json: Aggregated mistakes/positives across all activities with mark allocations
 - student_mappings.json: Per-student mistake/positive mappings
 """
 
@@ -12,6 +12,92 @@ import json
 import re
 from pathlib import Path
 from typing import Dict, List, Any
+
+
+def parse_rubric_marks(rubric_path: Path) -> Dict[str, int]:
+    """
+    Parse activity mark allocations from rubric.md.
+
+    Expected format in rubric:
+    - **A1 – Data Splitting:** 15 marks
+    - **A2 – Model Instantiation:** 10 marks
+
+    Returns:
+        Dict mapping activity ID to total marks (e.g., {'A1': 15, 'A2': 10})
+    """
+    activity_marks = {}
+
+    if not rubric_path.exists():
+        print(f"Warning: Rubric not found at {rubric_path}, using defaults")
+        return {}
+
+    with open(rubric_path, 'r') as f:
+        content = f.read()
+
+    # Parse lines like: "- **A1 – Data Splitting:** 15 marks"
+    pattern = r'-\s+\*\*([A-Z]\d+)\s+[–-].*?:\*\*\s+(\d+)\s+marks'
+    matches = re.findall(pattern, content)
+
+    for activity_id, marks in matches:
+        activity_marks[activity_id] = int(marks)
+
+    return activity_marks
+
+
+def parse_student_mappings(filepath: Path, activity_id: str) -> Dict[str, Dict[str, List[str]]]:
+    """
+    Parse per-student mistake/positive mappings from scoring file.
+
+    Expected format:
+    ### Per-Student Mistake/Positive Mapping
+    *   **Student 1 (Anthonia Offor)**: Mistakes: M1; Positives: P4
+    *   **Student 2 (Name)**: Mistakes: M2, M3; Positives: P1
+
+    Returns:
+        Dict mapping student name to {'mistakes': [...], 'positives': [...]}
+    """
+    student_mappings = {}
+
+    with open(filepath, 'r') as f:
+        content = f.read()
+
+    # Find the mapping section
+    mapping_match = re.search(
+        r'###?\s+Per-Student.*?Mapping(.*?)(?=\n###?|\n\n\*.*Total Students|\Z)',
+        content,
+        re.DOTALL | re.IGNORECASE
+    )
+
+    if not mapping_match:
+        return student_mappings
+
+    mapping_text = mapping_match.group(1)
+
+    # Parse each student line
+    # Pattern: *   **Student N (Name)**: Mistakes: M1, M2; Positives: P1, P2
+    pattern = r'\*+\s+\*\*Student\s+\d+\s+\(([^)]+)\)\*\*:\s*Mistakes:\s*([^;]+);\s*Positives:\s*(.+)'
+
+    for match in re.finditer(pattern, mapping_text):
+        student_name = match.group(1).strip()
+        mistakes_str = match.group(2).strip()
+        positives_str = match.group(3).strip()
+
+        # Parse mistakes
+        mistakes = []
+        if mistakes_str.lower() != 'none':
+            mistakes = [f"{activity_id}_{m.strip()}" for m in mistakes_str.split(',') if m.strip()]
+
+        # Parse positives
+        positives = []
+        if positives_str.lower() != 'none':
+            positives = [f"{activity_id}_{p.strip()}" for p in positives_str.split(',') if p.strip()]
+
+        student_mappings[student_name] = {
+            'mistakes': mistakes,
+            'positives': positives
+        }
+
+    return student_mappings
 
 
 def parse_scoring_markdown(filepath: Path) -> Dict[str, Any]:
@@ -108,7 +194,7 @@ def parse_scoring_markdown(filepath: Path) -> Dict[str, Any]:
     }
 
 
-def combine_scoring_files(normalized_dir: Path) -> tuple[Dict[str, Any], Dict[str, Any]]:
+def combine_scoring_files(normalized_dir: Path, rubric_path: Path = None) -> tuple[Dict[str, Any], Dict[str, Any]]:
     """
     Combine all A*_scoring.md files into unified data structures.
 
@@ -117,7 +203,13 @@ def combine_scoring_files(normalized_dir: Path) -> tuple[Dict[str, Any], Dict[st
     """
     all_mistakes = []
     all_positives = []
-    student_mappings = {}
+    all_student_mappings = {}
+
+    # Parse rubric for activity marks
+    activity_marks = {}
+    if rubric_path and rubric_path.exists():
+        activity_marks = parse_rubric_marks(rubric_path)
+        print(f"Loaded activity marks: {activity_marks}")
 
     # Find all A*_scoring.md files
     scoring_files = sorted(normalized_dir.glob('A*_scoring.md'))
@@ -127,7 +219,8 @@ def combine_scoring_files(normalized_dir: Path) -> tuple[Dict[str, Any], Dict[st
         return {
             'mistakes': [],
             'positives': [],
-            'total_marks': 100
+            'total_marks': 100,
+            'activity_marks': activity_marks
         }, {}
 
     # Process each activity's scoring file
@@ -135,37 +228,53 @@ def combine_scoring_files(normalized_dir: Path) -> tuple[Dict[str, Any], Dict[st
         activity_id = scoring_file.stem.replace('_scoring', '')  # e.g., "A1"
         print(f"Processing {scoring_file.name}...")
 
+        # Parse tables
         data = parse_scoring_markdown(scoring_file)
 
-        # Add activity prefix to IDs to avoid conflicts
+        # Add activity prefix to IDs and add activity mark allocation
         for mistake in data['mistakes']:
             mistake['id'] = f"{activity_id}_{mistake['id']}"
             mistake['activity'] = activity_id
+            mistake['activity_marks'] = activity_marks.get(activity_id, 0)
             all_mistakes.append(mistake)
 
         for positive in data['positives']:
             positive['id'] = f"{activity_id}_{positive['id']}"
             positive['activity'] = activity_id
+            positive['activity_marks'] = activity_marks.get(activity_id, 0)
             all_positives.append(positive)
+
+        # Parse student mappings
+        student_mappings = parse_student_mappings(scoring_file, activity_id)
+
+        # Merge into all_student_mappings
+        for student_name, mapping in student_mappings.items():
+            if student_name not in all_student_mappings:
+                all_student_mappings[student_name] = {
+                    'mistakes': [],
+                    'positives': []
+                }
+            all_student_mappings[student_name]['mistakes'].extend(mapping['mistakes'])
+            all_student_mappings[student_name]['positives'].extend(mapping['positives'])
 
     # Create combined scoring
     combined_scoring = {
         'mistakes': all_mistakes,
         'positives': all_positives,
-        'total_marks': 100  # TODO: Get from rubric
+        'total_marks': sum(activity_marks.values()) if activity_marks else 100,
+        'activity_marks': activity_marks
     }
 
-    # Create student mappings (placeholder for now - would come from actual student data)
-    # This would normally map each student to their specific mistakes/positives
-    # For now, we create a simple structure
-    student_mappings = {
+    # Create student mappings with metadata
+    student_mappings_output = {
         '_metadata': {
-            'total_students': 0,
+            'total_students': len(all_student_mappings),
             'total_activities': len(scoring_files)
         }
     }
+    student_mappings_output.update(all_student_mappings)
 
-    return combined_scoring, student_mappings
+    return combined_scoring, student_mappings_output
 
 
 def main():
@@ -182,17 +291,22 @@ def main():
         required=True,
         help="Output path for combined_scoring.json"
     )
+    parser.add_argument(
+        '--rubric',
+        help="Path to rubric.md file (optional)"
+    )
 
     args = parser.parse_args()
 
     normalized_dir = Path(args.normalized_dir)
     output_path = Path(args.output)
+    rubric_path = Path(args.rubric) if args.rubric else normalized_dir.parent / 'rubric.md'
 
     # Create parent directory if needed
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     # Combine scoring files
-    combined_scoring, student_mappings = combine_scoring_files(normalized_dir)
+    combined_scoring, student_mappings = combine_scoring_files(normalized_dir, rubric_path)
 
     # Save combined_scoring.json
     with open(output_path, 'w') as f:
@@ -201,6 +315,7 @@ def main():
     print(f"✓ Saved combined scoring to {output_path}")
     print(f"  - {len(combined_scoring['mistakes'])} total mistake types")
     print(f"  - {len(combined_scoring['positives'])} total positive types")
+    print(f"  - {student_mappings['_metadata']['total_students']} students with mappings")
 
     # Save student_mappings.json
     mappings_path = output_path.parent / 'student_mappings.json'

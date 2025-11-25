@@ -1,0 +1,199 @@
+#!/usr/bin/env python3
+"""
+Marker Agent Wrapper
+
+Loads student work, applies marker prompt, and saves assessment.
+"""
+
+import argparse
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+
+def load_prompt_template(assignment_type: str) -> str:
+    """Load the appropriate marker prompt template."""
+    prompts_dir = Path(__file__).parent.parent / "prompts"
+    prompt_file = prompts_dir / f"marker_{assignment_type}.md"
+
+    if not prompt_file.exists():
+        raise FileNotFoundError(f"Prompt template not found: {prompt_file}")
+
+    with open(prompt_file, 'r') as f:
+        return f.read()
+
+
+def load_notebook(notebook_path: str) -> dict:
+    """Load and return notebook JSON."""
+    with open(notebook_path, 'r', encoding='utf-8') as f:
+        return json.load(f)
+
+
+def extract_student_work(notebook_path: str, activity_id: str = None) -> str:
+    """
+    Extract student work from notebook.
+
+    For structured assignments with activity_id, extracts only that activity.
+    For free-form, returns entire notebook.
+    """
+    notebook = load_notebook(notebook_path)
+
+    if activity_id:
+        # Use activity extractor for structured assignments
+        extractor_path = Path(__file__).parent.parent / "extract_activities.py"
+        result = subprocess.run([
+            sys.executable,
+            str(extractor_path),
+            notebook_path,
+            "--output", "/tmp/extracted_activities"
+        ], capture_output=True, text=True)
+
+        if result.returncode != 0:
+            raise RuntimeError(f"Activity extraction failed: {result.stderr}")
+
+        # Load extracted activity
+        activity_file = Path(f"/tmp/extracted_activities/{activity_id}.json")
+        if activity_file.exists():
+            with open(activity_file, 'r') as f:
+                activity_data = json.load(f)
+                # Format cells for display
+                cells_text = []
+                for cell in activity_data['cells']:
+                    cell_type = cell['cell_type']
+                    source = cell['source']
+                    cells_text.append(f"[{cell_type}]\n{source}\n")
+                return "\n".join(cells_text)
+        else:
+            raise FileNotFoundError(f"Activity {activity_id} not found in submission")
+    else:
+        # Return entire notebook formatted for display
+        cells_text = []
+        for i, cell in enumerate(notebook.get('cells', [])):
+            cell_type = cell.get('cell_type', 'unknown')
+            source = cell.get('source', '')
+            if isinstance(source, list):
+                source = ''.join(source)
+            cells_text.append(f"Cell {i} [{cell_type}]:\n{source}\n")
+        return "\n".join(cells_text)
+
+
+def load_marking_criteria(criteria_path: str) -> str:
+    """Load marking criteria for this activity."""
+    if Path(criteria_path).exists():
+        with open(criteria_path, 'r') as f:
+            return f.read()
+    return "No specific criteria provided."
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Marker agent for evaluating student submissions"
+    )
+    parser.add_argument(
+        "--activity",
+        help="Activity ID (e.g., A1) for structured assignments"
+    )
+    parser.add_argument(
+        "--student",
+        required=True,
+        help="Student name"
+    )
+    parser.add_argument(
+        "--submission",
+        required=True,
+        help="Path to student submission notebook"
+    )
+    parser.add_argument(
+        "--criteria",
+        help="Path to marking criteria file"
+    )
+    parser.add_argument(
+        "--output",
+        required=True,
+        help="Output file for marking assessment"
+    )
+    parser.add_argument(
+        "--provider",
+        default="claude",
+        help="LLM provider"
+    )
+    parser.add_argument(
+        "--model",
+        help="LLM model"
+    )
+    parser.add_argument(
+        "--type",
+        choices=["structured", "freeform"],
+        default="structured",
+        help="Assignment type"
+    )
+
+    args = parser.parse_args()
+
+    try:
+        # Load prompt template
+        prompt_template = load_prompt_template(args.type)
+
+        # Extract student work
+        student_work = extract_student_work(args.submission, args.activity)
+
+        # Load marking criteria if provided
+        if args.criteria and Path(args.criteria).exists():
+            criteria = load_marking_criteria(args.criteria)
+        else:
+            # Try to find criteria file based on activity
+            if args.activity:
+                processed_dir = Path(args.submission).parent.parent / "processed"
+                criteria_file = processed_dir / "activities" / f"{args.activity}_criteria.md"
+                if criteria_file.exists():
+                    criteria = load_marking_criteria(str(criteria_file))
+                else:
+                    criteria = f"No criteria file found for {args.activity}"
+            else:
+                criteria = "No marking criteria provided."
+
+        # Substitute variables in prompt
+        prompt = prompt_template.format(
+            activity_id=args.activity or "N/A",
+            student_name=args.student,
+            submission_path=args.submission,
+            student_work=student_work,
+            marking_criteria=criteria
+        )
+
+        # Save prompt for debugging
+        prompt_debug_file = Path(args.output).with_suffix('.prompt.txt')
+        with open(prompt_debug_file, 'w') as f:
+            f.write(prompt)
+
+        # Call LLM via unified caller
+        llm_caller = Path(__file__).parent.parent / "llm_caller.sh"
+
+        cmd = [
+            str(llm_caller),
+            "--prompt", prompt,
+            "--mode", "headless",
+            "--provider", args.provider,
+            "--output", args.output
+        ]
+
+        if args.model:
+            cmd.extend(["--model", args.model])
+
+        result = subprocess.run(cmd, capture_output=True, text=True)
+
+        if result.returncode != 0:
+            print(f"Error: LLM call failed: {result.stderr}", file=sys.stderr)
+            sys.exit(1)
+
+        print(f"✓ Marking complete for {args.student} ({args.activity or 'full submission'})")
+        print(f"  Output: {args.output}")
+
+    except Exception as e:
+        print(f"Error: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

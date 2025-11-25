@@ -1,0 +1,101 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environment
+.venv/
+venv/
+ENV/
+env/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# IDE
+.vscode/
+*.code-workspace
+.idea/
+*.swp
+*.swo
+*~
+
+# LLM CLI Configs
+./.claude/
+./CLAUDE.md
+./GEMINI.md
+./AGENTS.md
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Assignment Artifacts (processed directories)
+# Ignore all generated files in processed/ subdirectories
+**/processed/
+!**/processed/.gitkeep
+
+# Assignments - ignore all except sample-assignment
+assignments/*
+!assignments/.gitkeep
+!assignments/sample-assignment/
+assignments/sample-assignment/processed/
+
+# Logs and state files
+*.log
+*.log.*
+state.json
+
+# Temporary files
+*.tmp
+*.temp
+/tmp/
+temp/
+
+# Session transcripts (these can be large)
+**/sessions/*.log
+
+# Claude Code specific
+.claude/
+
+# Approved schemes (instructor-specific, regenerated each time)
+**/approved_scheme.json
+
+# Generated CSVs (regenerated each time)
+**/grades.csv
+
+# Dashboard notebooks (regenerated each time)
+**/adjustment_dashboard.ipynb
+
+# Error files
+errors_*.json
+
+# Submission manifests (regenerated each time)
+submissions_manifest.json
+
+# Extracted activities (regenerated each time)
+**/extracted_activities/

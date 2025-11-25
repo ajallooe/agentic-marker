@@ -39,7 +39,21 @@ The ID column must contain ONLY `M001`-`M999` or `P001`-`P999` format.
 - ✅ "There were critical implementation failures in the core logic."
 - ✅ "Student demonstrated excellent use of stratification techniques."
 
-Use complete sentences with proper grammar, capitalization, and punctuation.
+**Formatting Requirements**:
+- Use complete sentences with proper grammar, capitalization, and punctuation
+- **NO bold text** - descriptions must be plain text
+- **NO italic text** - descriptions must be plain text
+- **NO markdown formatting** in descriptions (no asterisks, underscores, etc.)
+
+**Examples of INCORRECT formatting**:
+- ❌ "The student **did not include** the random_state parameter."
+- ❌ "There were *critical* implementation failures."
+- ❌ "Student used `incorrect` syntax."
+
+**Examples of CORRECT formatting**:
+- ✅ "The student did not include the random_state parameter."
+- ✅ "There were critical implementation failures in the core logic."
+- ✅ "Student demonstrated excellent use of stratification techniques."
 
 ## Input Data
 

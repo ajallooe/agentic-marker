@@ -49,6 +49,23 @@ Carefully review the student's work above and provide a structured assessment.
 - Are there comments or explanations (in markdown cells) that show comprehension?
 - Did they handle edge cases appropriately?
 
+## Description Formatting Guidelines
+
+When writing mistake and positive descriptions:
+- Use **plain text** - NO bold, italic, or other markdown formatting
+- Write descriptions as **complete sentences**, not title phrases
+- Use proper grammar, capitalization, and punctuation
+
+**INCORRECT examples**:
+- ❌ "**Missing** random_state Parameter"
+- ❌ "Used *incorrect* variable name"
+- ❌ "Missing Parameter" (title phrase)
+
+**CORRECT examples**:
+- ✅ "The student did not include the random_state parameter."
+- ✅ "The student used an incorrect variable name."
+- ✅ "The implementation lacked proper error handling."
+
 ## Output Format
 
 Provide your assessment in the following structure:
@@ -62,7 +79,7 @@ Provide your assessment in the following structure:
 ...
 
 ### Mistakes Found
-1. **[Mistake Category]**: [Detailed description]
+1. [Detailed description in plain text sentence format]
    - Severity: [Minor / Moderate / Severe / Critical]
    - Location: [Cell index or description]
    - Impact: [What this affects]
@@ -70,7 +87,7 @@ Provide your assessment in the following structure:
 2. [Continue for all mistakes...]
 
 ### Positive Points
-1. **[Positive Category]**: [Detailed description]
+1. [Detailed description in plain text sentence format]
    - Quality: [Good / Very Good / Excellent]
    - Location: [Cell index or description]
 

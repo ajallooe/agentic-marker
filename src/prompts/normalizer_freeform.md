@@ -16,6 +16,47 @@ You have access to {num_students} marker assessments:
 
 {rubric}
 
+## ID Format Requirements
+
+Use the M001-M999 and P001-P999 format for mistake and positive IDs:
+
+**CORRECT format**:
+- ✅ `M001` with description "The implementation did not include error handling."
+- ✅ `M002` with description "There were critical failures in the data validation logic."
+- ✅ `P001` with description "Student demonstrated excellent code organization."
+
+The ID column must contain ONLY `M001`-`M999` or `P001`-`P999` format.
+
+## Description Style Guidelines
+
+**IMPORTANT**: Write descriptions as **short sentences**, NOT titles or labels:
+
+**INCORRECT (title-style)**:
+- ❌ "Missing Error Handling"
+- ❌ "Critical Data Validation Failure"
+- ❌ "Excellent Code Organization"
+
+**CORRECT (sentence-style)**:
+- ✅ "The implementation did not include error handling."
+- ✅ "There were critical failures in the data validation logic."
+- ✅ "Student demonstrated excellent code organization."
+
+**Formatting Requirements**:
+- Use complete sentences with proper grammar, capitalization, and punctuation
+- **NO bold text** - descriptions must be plain text
+- **NO italic text** - descriptions must be plain text
+- **NO markdown formatting** in descriptions (no asterisks, underscores, etc.)
+
+**Examples of INCORRECT formatting**:
+- ❌ "The implementation **did not include** error handling."
+- ❌ "There were *critical* failures in validation."
+- ❌ "Student used `excellent` organization techniques."
+
+**Examples of CORRECT formatting**:
+- ✅ "The implementation did not include error handling."
+- ✅ "There were critical failures in the data validation logic."
+- ✅ "Student demonstrated excellent code organization."
+
 ## Your Tasks
 
 ### 1. Identify All Unique Mistakes

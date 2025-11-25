@@ -57,6 +57,23 @@ Carefully review the entire notebook above and provide a comprehensive structure
 - Are there creative solutions or optimizations?
 - Did they add valuable features not requested?
 
+## Description Formatting Guidelines
+
+When writing mistake and positive descriptions:
+- Use **plain text** - NO bold, italic, or other markdown formatting
+- Write descriptions as **complete sentences**, not title phrases
+- Use proper grammar, capitalization, and punctuation
+
+**INCORRECT examples**:
+- ❌ "**Missing** error handling"
+- ❌ "Used *incorrect* data structure"
+- ❌ "Missing Validation" (title phrase)
+
+**CORRECT examples**:
+- ✅ "The implementation did not include error handling."
+- ✅ "The student used an incorrect data structure for the task."
+- ✅ "The code lacked proper input validation."
+
 ## Output Format
 
 Provide your assessment in the following structure:
@@ -71,7 +88,7 @@ Provide your assessment in the following structure:
 ...
 
 ### Mistakes Found
-1. **[Mistake Category]**: [Detailed description]
+1. [Detailed description in plain text sentence format]
    - Severity: [Minor / Moderate / Severe / Critical]
    - Location: [Cell description or index]
    - Impact: [What this affects]
@@ -80,7 +97,7 @@ Provide your assessment in the following structure:
 2. [Continue for all mistakes...]
 
 ### Positive Points
-1. **[Positive Category]**: [Detailed description]
+1. [Detailed description in plain text sentence format]
    - Quality: [Good / Very Good / Excellent / Outstanding]
    - Location: [Cell description or index]
    - Why it's good: [Explanation]

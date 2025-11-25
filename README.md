@@ -9,12 +9,22 @@ An automated marking system for Jupyter notebook assignments using LLM agents co
 ### For Structured (Fill-in-the-Blank) Assignments
 
 ```bash
+# Optional: Place gradebook CSVs for automatic translation
+mkdir -p assignments/your-assignment-name/gradebooks
+cp ~/Downloads/*.csv assignments/your-assignment-name/gradebooks/
+
+# Run marking workflow
 ./mark_structured.sh assignments/your-assignment-name
 ```
 
 ### For Free-form Assignments
 
 ```bash
+# Optional: Place gradebook CSVs for automatic translation
+mkdir -p assignments/your-assignment-name/gradebooks
+cp ~/Downloads/*.csv assignments/your-assignment-name/gradebooks/
+
+# Run marking workflow
 ./mark_freeform.sh assignments/your-assignment-name
 ```
 
@@ -75,7 +85,8 @@ This system semi-automates the marking of Jupyter notebook assignments through a
 3. **Normalizer Agent** - Aggregates assessments and creates unified scoring scheme
 4. **Instructor Review** - Interactive dashboard for adjusting marks and viewing distribution
 5. **Unifier Agents** - Apply final scheme and create student feedback cards (in parallel)
-6. **Aggregator Agent** - Consolidates everything into a CSV for grade upload
+6. **Aggregator** - Consolidates everything into a CSV for grade upload
+7. **Translator** (optional) - Transfers grades back to LMS gradebooks with intelligent name matching
 
 ## Prerequisites
 
@@ -165,6 +176,9 @@ assignments/
     │   │       └── student2.ipynb
     │   └── section-2/
     │       └── student3.ipynb
+    ├── gradebooks/                    # Optional: For automatic translation
+    │   ├── section1.csv               # LMS gradebook exports (e.g., Moodle)
+    │   └── section2.csv
     └── processed/                     # Auto-generated artifacts
 ```
 
@@ -386,6 +400,7 @@ After completion, find:
 - `processed/approved_scheme.json` - Instructor-approved marking scheme
 - `processed/final/*_feedback.md` - Per-student feedback cards
 - `processed/final/grades.csv` - Final CSV for upload
+- `processed/translation/*` - Gradebook translation results (if gradebooks provided)
 - `processed/logs/*` - Complete logs and error reports
 
 ## Customizing Agent Behavior
@@ -901,10 +916,13 @@ For a typical lab (7 activities, 40 students):
 | 5. Normalizer | 2-5 minutes | Automatic |
 | 6. Adjustment Dashboard | 10-15 minutes | Interactive |
 | 7. Unifier Agents | 10-20 minutes | Automatic (parallel) |
-| 8. Aggregator | 2-3 minutes | Interactive |
+| 8. Aggregator | 2-3 minutes | Automatic |
+| 9. Translation (optional) | 3-5 minutes | Interactive |
 | **Total** | **~1-1.5 hours** | Mix |
 
 *Times vary based on class size, complexity, and max_parallel setting.*
+
+**Note**: Stage 9 (Translation) only runs if you placed gradebook CSV files in `assignments/<name>/gradebooks/` before starting the workflow. Otherwise, you can run translation manually later using `./translate_grades.sh`.
 
 ## Gradebook Translation
 
@@ -918,7 +936,57 @@ The translator handles the complex task of matching students between your `grade
 - There are minor spelling variations
 - Students are split across multiple section files
 
-### Usage
+### Two Usage Modes
+
+#### Automatic Mode (Recommended)
+
+Place your gradebook CSV files in the `gradebooks/` directory **before** running the marking workflow:
+
+```bash
+# 1. Setup your assignment with gradebooks
+mkdir -p "assignments/Lab 02/gradebooks"
+cp ~/Downloads/section*.csv "assignments/Lab 02/gradebooks/"
+
+# 2. Run marking workflow as normal
+./mark_structured.sh "assignments/Lab 02"
+
+# The workflow will automatically:
+# - Complete all marking stages (1-8)
+# - Detect gradebook CSVs in gradebooks/ directory
+# - Create translation mapping (Stage 9)
+# - Show you the mapping summary
+# - Prompt you to review and apply
+# - Update gradebooks and create backups
+```
+
+**Benefits**:
+- One complete workflow from start to finish
+- No need to remember to run translator separately
+- Gradebooks ready immediately after marking
+
+**Directory structure**:
+```text
+assignments/Lab 02/
+├── gradebooks/
+│   ├── COMP3510_Section1.csv    # Your Moodle exports
+│   └── COMP3510_Section2.csv
+├── submissions/
+│   └── ...
+└── processed/
+    ├── final/
+    │   └── grades.csv
+    └── translation/              # Auto-created by Stage 9
+        ├── translation_mapping.json
+        ├── translation_report.txt
+        ├── COMP3510_Section1.csv      # Updated gradebooks
+        ├── COMP3510_Section1_backup.csv
+        ├── COMP3510_Section2.csv
+        └── COMP3510_Section2_backup.csv
+```
+
+#### Manual Mode
+
+Run the translator separately after marking is complete:
 
 ```bash
 ./translate_grades.sh \
@@ -933,6 +1001,11 @@ The translator handles the complex task of matching students between your `grade
   --skip-mapping \
   --apply
 ```
+
+**Use when**:
+- You don't have gradebooks ready at marking time
+- You want more control over the translation process
+- You need to re-run translation with different gradebooks
 
 ### Two-Stage Process
 

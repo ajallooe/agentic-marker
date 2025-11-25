@@ -434,6 +434,96 @@ else
 fi
 
 # ============================================================================
+# STAGE 7: Gradebook Translation (Optional, Automatic)
+# ============================================================================
+
+GRADEBOOKS_DIR="$ASSIGNMENT_DIR/gradebooks"
+TRANSLATION_DIR="$PROCESSED_DIR/translation"
+TRANSLATION_MAPPING="$TRANSLATION_DIR/translation_mapping.json"
+
+# Check if gradebook CSVs are provided
+if [[ -d "$GRADEBOOKS_DIR" ]] && compgen -G "$GRADEBOOKS_DIR/*.csv" > /dev/null; then
+    log_info "Stage 7: Gradebook translation (automatic)..."
+
+    # Count gradebook files
+    GRADEBOOK_FILES=("$GRADEBOOKS_DIR"/*.csv)
+    NUM_GRADEBOOKS=${#GRADEBOOK_FILES[@]}
+    log_info "Found $NUM_GRADEBOOKS gradebook CSV file(s) in $GRADEBOOKS_DIR"
+
+    # Check if translation already complete
+    if [[ $RESUME == true && -f "$TRANSLATION_MAPPING" && -d "$TRANSLATION_DIR" && -f "$TRANSLATION_DIR/translation_report.txt" ]]; then
+        log_info "Translation already complete (mapping and report exist)"
+        log_success "Translation results: $TRANSLATION_DIR"
+    else
+        mkdir -p "$TRANSLATION_DIR"
+
+        # Build gradebook arguments
+        GRADEBOOK_ARGS=()
+        for gradebook in "${GRADEBOOK_FILES[@]}"; do
+            GRADEBOOK_ARGS+=(--gradebooks "$gradebook")
+        done
+
+        log_info "Creating translation mapping..."
+
+        python3 "$SRC_DIR/agents/translator.py" \
+            --assignment-name "$ASSIGNMENT_NAME" \
+            --total-marks "$TOTAL_MARKS" \
+            --assignment-type freeform \
+            --grades-csv "$GRADES_CSV" \
+            "${GRADEBOOK_ARGS[@]}" \
+            --output-path "$TRANSLATION_DIR" \
+            --provider "$DEFAULT_PROVIDER" \
+            ${MODEL_AGGREGATOR:+--model "$MODEL_AGGREGATOR"}
+
+        if [[ $? -ne 0 ]]; then
+            log_error "Translation mapping failed"
+            log_warning "Continuing with marking complete, but gradebooks not updated"
+        elif [[ ! -f "$TRANSLATION_MAPPING" ]]; then
+            log_error "Translation mapping file not created"
+            log_warning "Continuing with marking complete, but gradebooks not updated"
+        else
+            log_success "Translation mapping created"
+
+            # Show mapping summary
+            if command -v jq &> /dev/null; then
+                echo ""
+                echo "Translation Summary:"
+                jq -r '.summary | to_entries | .[] | "  \(.key): \(.value)"' "$TRANSLATION_MAPPING"
+                echo ""
+            fi
+
+            log_warning "Review the mapping before applying:"
+            log_info "  Mapping file: $TRANSLATION_MAPPING"
+            log_info ""
+            read -p "Press Enter to apply translation, or Ctrl+C to skip..."
+
+            # Apply translation
+            log_info "Applying translation to gradebooks..."
+
+            python3 "$SRC_DIR/apply_translation.py" \
+                --mapping "$TRANSLATION_MAPPING" \
+                --output-dir "$TRANSLATION_DIR" \
+                --apply
+
+            if [[ $? -ne 0 ]]; then
+                log_error "Translation application failed"
+                log_warning "Original gradebooks unchanged"
+            else
+                log_success "Translation applied successfully"
+                log_info "  Updated gradebooks: $TRANSLATION_DIR/*.csv"
+                log_info "  Backups: $TRANSLATION_DIR/*_backup.csv"
+            fi
+        fi
+    fi
+else
+    log_info "Stage 7: Skipping gradebook translation (no gradebooks provided)"
+    log_info "To use automatic translation, place gradebook CSV files in:"
+    log_info "  $GRADEBOOKS_DIR/"
+    log_info "Or run translation manually later:"
+    log_info "  ./translate_grades.sh --assignment-dir \"$ASSIGNMENT_DIR\" --gradebooks <files>"
+fi
+
+# ============================================================================
 # FINAL SUMMARY
 # ============================================================================
 
@@ -448,6 +538,14 @@ log_info "  Marking criteria: $PROCESSED_DIR/marking_criteria.md"
 log_info "  Final grades: $FINAL_DIR/grades.csv"
 log_info "  Student feedback: $FINAL_DIR/*_feedback.md"
 log_info "  Logs: $LOGS_DIR/"
+
+# Add translation results if completed
+if [[ -f "$TRANSLATION_MAPPING" && -f "$TRANSLATION_DIR/translation_report.txt" ]]; then
+    log_info "  Translation mapping: $TRANSLATION_MAPPING"
+    log_info "  Updated gradebooks: $TRANSLATION_DIR/*.csv"
+    log_info "  Translation report: $TRANSLATION_DIR/translation_report.txt"
+fi
+
 echo ""
 log_success "All marking artifacts saved to: $PROCESSED_DIR"
 echo "========================================================================"

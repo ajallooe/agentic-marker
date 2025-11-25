@@ -10,6 +10,11 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SRC_DIR="$SCRIPT_DIR/src"
 
+# Activate virtual environment if it exists
+if [[ -f "$SCRIPT_DIR/.venv/bin/activate" ]]; then
+    source "$SCRIPT_DIR/.venv/bin/activate"
+fi
+
 # Color codes for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'

@@ -41,7 +41,16 @@ def load_marker_assessments(markings_dir: Path, activity_id: str = None, pattern
         files = list(markings_dir.glob(pattern))
 
     for file in sorted(files):
-        student_name = file.stem.split('_')[0]  # Extract student name from filename
+        # Extract student name from filename (handle names with spaces/underscores)
+        # For structured: "Student Name_A1.md" -> "Student Name"
+        # For free-form: "Student Name.md" -> "Student Name"
+        stem = file.stem
+        if activity_id:
+            # Remove activity suffix: "Student Name_A1" -> "Student Name"
+            student_name = stem.rsplit('_', 1)[0]
+        else:
+            student_name = stem
+
         with open(file, 'r') as f:
             content = f.read()
 

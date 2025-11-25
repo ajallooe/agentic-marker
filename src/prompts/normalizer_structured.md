@@ -76,11 +76,11 @@ For each positive point:
 
 For each student, list which mistakes and positive points apply:
 
-**{student_1_name}**:
+**Student 1 Name**:
 - Mistakes: M1, M3, M7
 - Positives: P2, P4
 
-**{student_2_name}**:
+**Student 2 Name**:
 - Mistakes: M2, M5
 - Positives: P1, P3, P5
 

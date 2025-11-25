@@ -906,6 +906,153 @@ For a typical lab (7 activities, 40 students):
 
 *Times vary based on class size, complexity, and max_parallel setting.*
 
+## Gradebook Translation
+
+After marking is complete, you can transfer grades back to your section gradebook CSVs (e.g., Moodle exports) using the gradebook translator.
+
+### What It Does
+
+The translator handles the complex task of matching students between your `grades.csv` and section gradebooks, even when:
+- Student names are formatted differently ("Doe, John" vs "John Doe")
+- Names include middle initials or nicknames
+- There are minor spelling variations
+- Students are split across multiple section files
+
+### Usage
+
+```bash
+./translate_grades.sh \
+  --assignment-dir "assignments/Lab 02" \
+  --gradebooks section1.csv section2.csv section3.csv \
+  --dry-run
+
+# After reviewing the mapping, apply the changes:
+./translate_grades.sh \
+  --assignment-dir "assignments/Lab 02" \
+  --gradebooks section1.csv section2.csv section3.csv \
+  --skip-mapping \
+  --apply
+```
+
+### Two-Stage Process
+
+**Stage 1: Mapping Creation (LLM Agent)**
+- Analyzes the structure of each gradebook CSV
+- Uses intelligent fuzzy matching to pair students
+- Identifies which columns to update (total mark, feedback, activities)
+- Creates a detailed mapping file: `processed/translation/translation_mapping.json`
+
+**Stage 2: Application (Deterministic)**
+- Applies the mapping to update gradebook CSVs
+- Creates backups of original files
+- Adds/updates columns as needed
+- Generates application report
+
+### Options
+
+**Required**:
+- `--assignment-dir <dir>` - Assignment directory containing `processed/final/grades.csv`
+- `--gradebooks <csv1> <csv2> ...` - One or more section gradebook CSV files
+
+**Optional**:
+- `--dry-run` - Preview changes without modifying files (default)
+- `--apply` - Actually update the gradebook files
+- `--skip-mapping` - Use existing mapping file (skip LLM stage)
+- `--provider <provider>` - LLM provider (default: from overview.md)
+- `--model <model>` - Specific model (default: from overview.md)
+
+### Workflow
+
+1. **Create mapping** (uses LLM for fuzzy matching):
+   ```bash
+   ./translate_grades.sh \
+     --assignment-dir "assignments/lab1" \
+     --gradebooks section1.csv section2.csv \
+     --dry-run
+   ```
+
+2. **Review mapping**:
+   ```bash
+   # Check the mapping file
+   cat "assignments/lab1/processed/translation/translation_mapping.json"
+
+   # Review match confidence scores
+   # Check for unmatched students
+   ```
+
+3. **Apply updates**:
+   ```bash
+   ./translate_grades.sh \
+     --assignment-dir "assignments/lab1" \
+     --gradebooks section1.csv section2.csv \
+     --skip-mapping \
+     --apply
+   ```
+
+### Output Files
+
+- `processed/translation/translation_mapping.json` - Complete mapping with confidence scores
+- `processed/translation/translation_report.txt` - Application summary
+- `processed/translation/section_name.csv` - Updated gradebook files
+- `processed/translation/section_name_backup.csv` - Original backups
+
+### Matching Strategies
+
+The translator uses multiple strategies in order of preference:
+
+1. **Exact match** - Names match exactly (case insensitive)
+2. **Reverse match** - "Last, First" vs "First Last"
+3. **Initials match** - "John A. Doe" matches "John Doe"
+4. **Nickname match** - "Mike" matches "Michael", etc.
+5. **Fuzzy match** - Handles typos (Levenshtein distance)
+6. **Partial match** - "John Doe" matches "John Michael Doe"
+
+Only high-confidence matches (>80%) are made automatically. Low-confidence matches are flagged for review.
+
+### Example
+
+```bash
+# After completing marking for Lab 02
+./translate_grades.sh \
+  --assignment-dir "assignments/Lab 02 - Decision Tree Classifier" \
+  --gradebooks ~/Downloads/COMP3510_Section1.csv ~/Downloads/COMP3510_Section2.csv \
+  --dry-run
+
+# Review output:
+# MATCHING SUMMARY:
+# Total students in grades.csv: 32
+# Total students in gradebooks: 35
+# Successfully matched: 30
+# Unmatched from grades: 2
+# Unmatched from gradebooks: 5
+# Low confidence matches: 3
+
+# If satisfied, apply:
+./translate_grades.sh \
+  --assignment-dir "assignments/Lab 02 - Decision Tree Classifier" \
+  --gradebooks ~/Downloads/COMP3510_Section1.csv ~/Downloads/COMP3510_Section2.csv \
+  --skip-mapping \
+  --apply
+
+# Upload updated gradebooks to Moodle
+```
+
+### Troubleshooting
+
+**"No matching student in gradebook"**:
+- Student may have dropped the course
+- Check for name variations in the mapping file
+- Manually add the student to the gradebook and re-run
+
+**"Low confidence matches"**:
+- Review the mapping file for these students
+- Check confidence scores and match methods
+- Consider manual adjustments if needed
+
+**"Column already exists"**:
+- Existing columns will be overwritten with new values
+- Backups are created automatically
+
 ## License
 
 MIT License - See LICENSE file

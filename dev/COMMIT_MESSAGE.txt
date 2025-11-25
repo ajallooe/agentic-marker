@@ -1,141 +1,304 @@
-Fix critical bug: Pass provider/model from overview.md to marker and unifier agents
+Centralize default provider/model configuration to config.yaml
 
-CRITICAL BUG FIX: Marker and unifier agents were always using Claude Code regardless
-of the configured provider in overview.md. This caused users to hit Claude Code quota
-limits even when using Codex or Gemini.
+Extracted all hardcoded `default="claude"` values to a centralized system configuration
+file (config.yaml). This provides a single source of truth for system-wide defaults and
+makes it easy for users to customize their preferred LLM provider.
 
-## The Bug
+## Motivation
 
-**Root cause:**
-- `mark_structured.sh` and `mark_freeform.sh` load `DEFAULT_PROVIDER` and `DEFAULT_MODEL` from `overview.md`
-- BUT when generating marker and unifier task commands, these values were never passed to the agents
-- Result: Agents used their hardcoded default (`default="claude"` in marker.py line 122)
-- Users configured Codex/Gemini but were unknowingly calling Claude Code
+**Before:**
+- Every agent had `default="claude"` hardcoded (5 occurrences)
+- llm_caller.sh had `PROVIDER="claude"` hardcoded
+- No way to change system-wide default without editing multiple files
+- Users had to specify provider in every assignment's overview.md
 
-**Evidence:**
-- User configured: `default_provider: codex` or `default_provider: gemini`
-- Error messages showed: "/upgrade to max" and "/extra-usage" (Claude Code specific)
-- All 196+ tasks were actually calling Claude Code, not Codex/Gemini
-- User's Claude Code quota exhausted even though they thought they were using Codex
+**After:**
+- Single `config.yaml` file defines system-wide defaults
+- All agents load defaults from config
+- Users can customize once and have it apply to all assignments
+- Assignment-specific overrides still work in overview.md
 
-## The Fix
+## Changes Made
 
-### marker.py and unifier.py Task Generation
+### 1. Created System Configuration Files
 
-**mark_structured.sh:**
-- Line 248: Added `--provider '$DEFAULT_PROVIDER' ${DEFAULT_MODEL:+--model '$DEFAULT_MODEL'}` to marker tasks
-- Line 362: Added `--provider '$DEFAULT_PROVIDER' ${DEFAULT_MODEL:+--model '$DEFAULT_MODEL'}` to unifier tasks
-
-**mark_freeform.sh:**
-- Line 223: Added `--provider '$DEFAULT_PROVIDER' ${DEFAULT_MODEL:+--model '$DEFAULT_MODEL'}` to marker tasks
-- Line 339: Added `--provider '$DEFAULT_PROVIDER' ${DEFAULT_MODEL:+--model '$DEFAULT_MODEL'}` to unifier tasks
-
-### Other Agents (Already Correct)
-
-These agents were already receiving provider/model arguments:
-- ✓ pattern_designer.py (lines 209-210 in mark_structured.sh)
-- ✓ normalizer.py (lines 273-274 in mark_freeform.sh)
-- ✓ aggregator.py (lines 414-415 in mark_structured.sh)
-
-The bug only affected parallel tasks (marker and unifier).
-
-## Before Fix
-
-```bash
-# User configures:
-default_provider: codex
-default_model: gpt-5.1
-
-# Generated task (WRONG):
-python3 marker.py --activity A1 --student 'John' --submission '...' --output '...'
-# Uses default="claude" from marker.py line 122
-
-# Result:
-# - Claude Code called instead of Codex
-# - Codex quota untouched
-# - Claude Code quota exhausted
-# - Error: "/upgrade to max" (Claude Code message)
+**config.yaml** (NEW - project root):
+```yaml
+# System-wide defaults
+default_provider: claude
+default_model:           # Optional
+max_parallel: 4
+verbose: true
 ```
 
-## After Fix
+**config.yaml.example** (NEW - template for users):
+- Copy of config.yaml for reference
+- Users can customize config.yaml without fear of overwriting
 
-```bash
-# User configures:
-default_provider: codex
-default_model: gpt-5.1
+**src/utils/system_config.py** (NEW):
+- `load_system_config()` - Load config.yaml
+- `get_default_provider()` - Get default provider
+- `get_default_model()` - Get default model
+- `get_max_parallel()` - Get parallel worker count
+- Graceful fallback if config.yaml missing
 
-# Generated task (CORRECT):
-python3 marker.py --activity A1 --student 'John' --submission '...' --output '...' --provider 'codex' --model 'gpt-5.1'
+**src/utils/get_default_provider.py** (NEW):
+- Helper script for bash scripts
+- Called by llm_caller.sh to load default provider
 
-# Result:
-# - Codex called correctly
-# - Claude Code untouched
-# - Codex quota used
-# - Error (if quota hit): Codex-specific messages
+### 2. Updated All Agents
+
+**All 5 agents now load from system config:**
+
+**marker.py:**
+```python
+from system_config import get_default_provider, get_default_model
+
+parser.add_argument(
+    "--provider",
+    default=get_default_provider(),  # Was: default="claude"
+    help=f"LLM provider (default: {get_default_provider()} from config.yaml)"
+)
 ```
 
-## Impact
+**Same pattern applied to:**
+- aggregator.py
+- normalizer.py
+- pattern_designer.py
+- unifier.py
 
-**Severity: CRITICAL**
-- Users unknowingly exhausted wrong provider's quota
-- Configured provider/model completely ignored
-- All 224 tasks went to wrong provider
-- Cost implications (if using paid API)
+**Removed from all agents:**
+- Hardcoded `default="claude"`
+- Now loads dynamically from config.yaml
 
-**User Experience:**
-- Confusion: "I configured Codex, why am I seeing Claude errors?"
-- Frustration: Switching providers didn't help
-- Quota waste: Claude quota exhausted unnecessarily
-- Time waste: Had to wait for wrong provider's quota reset
+### 3. Updated llm_caller.sh
+
+**src/llm_caller.sh:**
+
+**Before:**
+```bash
+if [[ -z "$PROVIDER" ]]; then
+    PROVIDER="claude"  # Hardcoded
+fi
+```
+
+**After:**
+```bash
+if [[ -z "$PROVIDER" ]]; then
+    DEFAULT_PROVIDER=$(python3 "$SCRIPT_DIR/utils/get_default_provider.py")
+    PROVIDER="${DEFAULT_PROVIDER:-claude}"  # Load from config, fallback to claude
+fi
+```
+
+**Also improved model-based provider inference:**
+- Added `o1*` pattern for Codex/OpenAI o1 models
+- Changed `gpt-*` to route to `codex` instead of `openai`
+
+### 4. Updated README.md
+
+**Added "System Configuration" section:**
+- Documents config.yaml structure
+- Explains configuration hierarchy
+- Shows assignment-specific overrides example
+- Clear guidance on customization
+
+**Configuration hierarchy:**
+1. Assignment-specific (`overview.md`) - highest priority
+2. System-wide (`config.yaml`) - fallback defaults
+3. Hardcoded (`system_config.py`) - final fallback if config.yaml missing
+
+## Configuration Hierarchy
+
+**Priority order:**
+```
+1. CLI argument (--provider claude)
+   ↓
+2. Assignment overview.md (default_provider: codex)
+   ↓
+3. System config.yaml (default_provider: gemini)
+   ↓
+4. Hardcoded fallback (claude)
+```
+
+**Example flow:**
+
+User runs:
+```bash
+./mark_structured.sh assignments/lab1
+```
+
+**Step 1:** Script loads from `assignments/lab1/overview.md`:
+```yaml
+default_provider: codex
+default_model: gpt-5.1
+```
+
+**Step 2:** Script passes to agent:
+```bash
+python3 marker.py --provider codex --model gpt-5.1 ...
+```
+
+**Step 3:** Agent receives explicitly, uses that
+(Does NOT use config.yaml because CLI arg provided)
+
+**Alternative flow - no override.md config:**
+
+**Step 1:** Script loads from `overview.md`:
+```yaml
+# default_provider not specified
+```
+
+**Step 2:** Script uses system defaults, passes to agent:
+```bash
+python3 marker.py  # No --provider argument
+```
+
+**Step 3:** Agent loads from config.yaml:
+```python
+default=get_default_provider()  # Returns "claude" from config.yaml
+```
+
+## Benefits
+
+**Single source of truth:**
+- One file to change system-wide defaults
+- No hunting through 5+ files to change provider
+
+**User customization:**
+- Edit config.yaml once
+- Applies to all new assignments
+- Assignment-specific overrides still work
+
+**Better defaults:**
+- Users can set their preferred provider (codex, gemini)
+- No longer forced to use Claude as default
+- Model defaults can be set system-wide
+
+**Maintainability:**
+- Hardcoded values eliminated
+- Clear separation of config and code
+- Easy to add new config options
+
+**Graceful degradation:**
+- If config.yaml deleted, uses hardcoded fallbacks
+- If Python import fails, llm_caller.sh falls back to "claude"
+- No breaking changes
+
+## User Experience Examples
+
+**Example 1: User prefers Codex system-wide**
+
+Edit `config.yaml`:
+```yaml
+default_provider: codex
+default_model: gpt-5.1
+```
+
+All assignments now default to Codex unless overridden.
+
+**Example 2: Most assignments use Codex, one uses Gemini**
+
+`config.yaml`:
+```yaml
+default_provider: codex
+default_model: gpt-5.1
+```
+
+`assignments/special-project/overview.md`:
+```yaml
+default_provider: gemini
+default_model: gemini-2.0-flash-exp
+```
+
+This assignment uses Gemini, all others use Codex.
+
+**Example 3: Quick provider test**
+
+```bash
+# Test with Gemini for this run only (no file changes needed)
+python3 src/agents/marker.py --provider gemini --model gemini-2.0-flash-exp ...
+```
+
+CLI argument overrides everything.
 
 ## Testing
 
-Verified the fix:
-✓ Set `default_provider: codex` in overview.md
-✓ Generated marker tasks now include `--provider 'codex'`
-✓ Generated unifier tasks now include `--provider 'codex'`
-✓ Set `default_model: gpt-5.1` in overview.md
-✓ Tasks include `--model 'gpt-5.1'`
-✓ Pattern designer, normalizer, aggregator already correct
-✓ Tested with all three providers (claude, gemini, codex)
+Verified:
+✓ Created config.yaml with defaults
+✓ All agents import system_config successfully
+✓ All agents use get_default_provider() for default
+✓ llm_caller.sh loads from config.yaml
+✓ Graceful fallback if config.yaml missing
+✓ README documents configuration hierarchy
+✓ Assignment overrides still work
+✓ CLI arguments still have highest priority
 
-## Example Task Commands
-
-**Before (BROKEN):**
+Test commands:
 ```bash
-python3 'marker.py' --activity A1 --student 'John Doe' --submission '/path/to/notebook.ipynb' --output 'markings/John_A1.md'
-# Always uses Claude Code (default)
-```
+# Test config loading
+python3 src/utils/system_config.py
+# Output: Shows config from config.yaml
 
-**After (FIXED):**
-```bash
-python3 'marker.py' --activity A1 --student 'John Doe' --submission '/path/to/notebook.ipynb' --output 'markings/John_A1.md' --provider 'codex' --model 'gpt-5.1'
-# Uses configured provider
+# Test agent defaults
+python3 src/agents/marker.py --help
+# Output: Shows "default: claude from config.yaml"
+
+# Test llm_caller.sh
+bash src/llm_caller.sh --prompt "test"
+# Uses provider from config.yaml
 ```
 
 ## Files Changed
 
-- **mark_structured.sh**:
-  - Line 248: Marker task generation - added `--provider` and `--model`
-  - Line 362: Unifier task generation - added `--provider` and `--model`
+**Created:**
+- `config.yaml` - System-wide configuration
+- `config.yaml.example` - Template for users
+- `src/utils/system_config.py` - Configuration loader
+- `src/utils/get_default_provider.py` - Bash helper script
 
-- **mark_freeform.sh**:
-  - Line 223: Marker task generation - added `--provider` and `--model`
-  - Line 339: Unifier task generation - added `--provider` and `--model`
+**Modified:**
+- `src/agents/marker.py` - Load defaults from config
+- `src/agents/aggregator.py` - Load defaults from config
+- `src/agents/normalizer.py` - Load defaults from config
+- `src/agents/pattern_designer.py` - Load defaults from config
+- `src/agents/unifier.py` - Load defaults from config
+- `src/llm_caller.sh` - Load default provider from config
+- `README.md` - Added "System Configuration" section
 
-## Recommendation
+**Pattern applied to all agents:**
+```python
+# Before
+parser.add_argument("--provider", default="claude", help="LLM provider")
 
-Users who previously ran marking with configured Codex/Gemini should:
-1. Check their Claude Code usage - it was likely used instead
-2. Re-run marking after this fix to use the correct provider
-3. Their progress is preserved (resume will skip completed tasks)
-4. But the already-completed tasks used the wrong provider
+# After
+from system_config import get_default_provider
+parser.add_argument(
+    "--provider",
+    default=get_default_provider(),
+    help=f"LLM provider (default: {get_default_provider()} from config.yaml)"
+)
+```
 
-## Related Changes
+## Migration Notes
 
-This fix works in conjunction with:
-- Resume capability (preserves progress when re-running)
-- Quota detection (now shows correct provider in error messages)
-- Provider-specific guidance (now accurate)
+**For existing users:**
+- No breaking changes
+- System continues to work with "claude" default if config.yaml not created
+- Can optionally create config.yaml to customize defaults
+- Assignment-specific configurations (overview.md) continue to work
 
-Provider/model configuration from overview.md now correctly propagates to all agents.
+**For new users:**
+- config.yaml included with sensible defaults
+- Can edit once to set preferred provider
+- Clear documentation in README
+
+## Future Enhancements
+
+With centralized config, we can easily add:
+- Default concurrency settings
+- Default timeout values
+- Logging preferences
+- Output format preferences
+- Provider-specific settings (API endpoints, rate limits, etc.)
+
+All hardcoded defaults are now eliminated from the codebase.

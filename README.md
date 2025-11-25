@@ -182,18 +182,86 @@ The system supports multiple providers via CLI:
 - **Gemini**: `gemini` command (requires Gemini CLI)
 - **OpenAI/Codex**: `codex` command (requires Codex CLI)
 
+### Available Providers and Models
+
+#### Claude Code Provider
+
+Command: `claude`
+
+**Supported Models:**
+
+- `claude-sonnet-4-5` - Latest Sonnet (balanced performance and cost)
+- `claude-opus-4-5` - Most capable model (slower, more expensive)
+- `claude-haiku-4-5` - Fastest model (lower cost)
+
+**Model Aliases:**
+
+- `sonnet` → `claude-sonnet-4-5`
+- `opus` → `claude-opus-4-5`
+- `haiku` → `claude-haiku-4-5`
+
+#### Gemini Provider
+
+Command: `gemini`
+
+**Supported Models:**
+
+- `gemini-2.5-pro` - Most capable Gemini model
+- `gemini-2.5-flash` - Fast and efficient
+- `gemini-2.0-flash` - Legacy model (still supported)
+
+**Note:** Model availability depends on your Gemini CLI version and API access.
+
+#### Codex/OpenAI Provider
+
+Command: `codex`
+
+**Supported Models:**
+
+- `gpt-5.1` - Latest GPT model
+- `gpt-5.1-codex-max` - Maximum reasoning capability
+- `gpt-5.1-codex-mini` - Faster, cost-effective
+
+### Configuration Examples
+
 Specify in `overview.md`:
+
+**Claude (default):**
+
+```markdown
+default_provider: claude
+default_model: claude-sonnet-4-5
+```
+
+**Gemini:**
 
 ```markdown
 default_provider: gemini
-default_model: gemini-2.0-flash
+default_model: gemini-2.5-pro
 ```
 
-Or for OpenAI:
+**Codex:**
 
 ```markdown
 default_provider: codex
 default_model: gpt-5.1
+```
+
+**Using aliases:**
+
+```markdown
+default_provider: claude
+default_model: sonnet
+```
+
+### Provider Auto-Detection
+
+You can omit the `default_provider` field - the system will auto-detect from the model name:
+
+```markdown
+default_model: claude-sonnet-4-5  # Auto-detects claude provider
+default_model: gemini-2.5-pro     # Auto-detects gemini provider
+default_model: gpt-5.1            # Auto-detects codex provider
 ```
 
 ### Verify CLI Tools

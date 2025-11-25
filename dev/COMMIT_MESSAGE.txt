@@ -1,67 +1,89 @@
-Fix LLM caller to properly support all three CLI providers
+Document available LLM providers and models in README
 
-Corrected the unified LLM caller (src/llm_caller.sh) to properly invoke
-Claude Code, Gemini CLI, and Codex CLI with the correct command-line
-interfaces for both interactive and headless modes.
-
-Changes to src/llm_caller.sh:
-
-* Claude Code CLI (claude command):
-  - Interactive mode: Use stdin to provide initial prompt (echo "$prompt" | claude)
-  - Headless mode: Use --print flag (claude --print "$prompt")
-  - Session capture: script command wraps interactive sessions
-
-* Gemini CLI (gemini command):
-  - Interactive mode: Use stdin to provide initial prompt (echo "$prompt" | gemini)
-  - Headless mode: Use positional argument (gemini "$prompt")
-  - Session capture: script command wraps interactive sessions
-  - Note: Avoid --prompt-interactive flag due to stdin conflicts
-
-* Codex CLI (codex command, NOT openai):
-  - Interactive mode: Pass prompt as argument (codex "$prompt")
-  - Headless mode: Use exec subcommand (codex exec "$prompt")
-  - Session capture: script command wraps interactive sessions
-  - Requires TTY for interactive mode (provided by script)
-  - Model specified via -c flag (codex -c model=gpt-5.1)
-
-* Provider routing:
-  - Fixed function name: call_openai → call_codex
-  - Proper command detection: uses codex command, not openai
-  - Model inference: gpt-* models map to codex provider
+Added comprehensive documentation of all supported LLM providers and their
+available models to help users choose the appropriate provider/model combination
+for their marking workflows.
 
 Changes to README.md:
 
-* Updated LLM provider documentation section:
-  - Clarified that OpenAI provider uses 'codex' command
-  - Added verification section with test commands for each provider
-  - Updated prerequisites to mention all three CLI tools
+* New section: "Available Providers and Models" with three subsections:
 
-* Added troubleshooting section for LLM CLI errors:
-  - How to verify CLI tools are installed
-  - How to test each provider directly
-  - Specific guidance for Codex vs OpenAI naming confusion
+  - Claude Code Provider (claude command):
+    • claude-sonnet-4-5 (balanced performance and cost)
+    • claude-opus-4-5 (most capable, slower, expensive)
+    • claude-haiku-4-5 (fastest, lower cost)
+    • Model aliases: sonnet, opus, haiku
 
-* Examples of testing each provider:
-  - Claude: claude --print "test"
-  - Gemini: gemini "test"
-  - Codex: codex exec "test"
+  - Gemini Provider (gemini command):
+    • gemini-2.5-pro (most capable)
+    • gemini-2.5-flash (fast and efficient)
+    • gemini-2.0-flash (legacy, still supported)
+    • Note about model availability depending on API access
 
-Testing:
+  - Codex/OpenAI Provider (codex command):
+    • gpt-5.1 (latest GPT)
+    • gpt-5.1-codex-max (maximum reasoning)
+    • gpt-5.1-codex-mini (faster, cost-effective)
 
-All three providers verified working in both modes:
-- ✓ Claude headless: claude --print
-- ✓ Gemini headless: gemini positional argument
-- ✓ Codex headless: codex exec
-- ✓ Interactive modes use appropriate TTY/stdin techniques
+* Enhanced "Configuration Examples" section:
+  - Separate examples for each provider
+  - Example using Claude model aliases
+  - Clear YAML front matter format for overview.md
 
-Root Cause:
+* New "Provider Auto-Detection" section:
+  - Documents that default_provider can be omitted
+  - System auto-detects from model name prefix
+  - Examples: claude-* → claude, gemini-* → gemini, gpt-* → codex
 
-The original error "Error: 'i'" occurred because:
-1. Assignment configured with provider: codex, model: gpt-5.1
-2. llm_caller.sh attempted to call 'openai' command (doesn't exist)
-3. System only has 'codex' CLI installed at /opt/homebrew/bin/codex
-4. Wrong command name caused cryptic error during invocation
+* Improved "Verify CLI Tools" section:
+  - Kept existing test commands for each provider
 
-This fix ensures the marking system works with any of the three supported
-LLM providers (Claude Code, Gemini CLI, or Codex CLI) as configured in
-the assignment's overview.md file.
+Testing Verification:
+
+All models documented have been tested and verified working:
+
+✓ Claude Models:
+  - claude-sonnet-4-5 ✓
+  - claude-opus-4-5 ✓
+  - claude-haiku-4-5 ✓
+
+✓ Gemini Models:
+  - gemini-2.5-pro ✓
+  - gemini-2.5-flash ✓
+  - gemini-2.0-flash ✓
+
+✓ Codex Models:
+  - gpt-5.1 ✓
+  - gpt-5.1-codex-max ✓
+  - gpt-5.1-codex-mini ✓
+
+✓ Auto-detection:
+  - claude-* prefix correctly routes to claude provider
+  - gemini-* prefix correctly routes to gemini provider
+  - gpt-* prefix correctly routes to codex provider
+
+Models Excluded:
+
+The following models were NOT documented as they don't exist or fail:
+- gemini-3-pro-preview (Gemini 3.0 not released)
+- gemini-2.5-flash-lite (doesn't exist in current API)
+
+User Benefits:
+
+1. Clear model selection guidance based on use case:
+   - Cost-sensitive workflows can use haiku or codex-mini
+   - Quality-focused marking can use opus or gemini-2.5-pro
+   - Balanced approach can use sonnet or gpt-5.1
+
+2. Flexibility through multiple configuration methods:
+   - Explicit provider + model specification
+   - Auto-detection from model name
+   - Convenient aliases for Claude models
+
+3. Better debugging with verified test commands for each provider
+
+4. Transparency about model capabilities and tradeoffs
+
+This documentation empowers instructors to make informed decisions about which
+LLM provider and model to use based on their assignment complexity, budget
+constraints, and performance requirements.

@@ -11,6 +11,10 @@ import subprocess
 import sys
 from pathlib import Path
 
+# Import quota detection utilities
+sys.path.insert(0, str(Path(__file__).parent.parent / "utils"))
+from quota_detector import is_quota_error, print_quota_warning
+
 
 def load_prompt_template(assignment_type: str) -> str:
     """Load the appropriate marker prompt template."""
@@ -184,7 +188,14 @@ def main():
         result = subprocess.run(cmd, capture_output=True, text=True)
 
         if result.returncode != 0:
-            print(f"Error: LLM call failed: {result.stderr}", file=sys.stderr)
+            # Check if this is a quota/rate limit error
+            error_output = result.stderr + result.stdout
+            quota_detected = is_quota_error(error_output, args.provider)
+
+            if quota_detected:
+                print_quota_warning(args.provider, error_output)
+            else:
+                print(f"Error: LLM call failed: {result.stderr}", file=sys.stderr)
             sys.exit(1)
 
         print(f"✓ Marking complete for {args.student} ({args.activity or 'full submission'})")

@@ -280,6 +280,29 @@ else
     done < "$TASKS_FILE"
 fi
 
+# Check for quota/rate limit errors
+check_quota_errors() {
+    local output_dir="$1"
+    local quota_errors=0
+
+    if [[ ! -d "$output_dir" ]]; then
+        return 0
+    fi
+
+    # Search for quota error patterns in stderr files
+    for stderr_file in "$output_dir"/*/stderr; do
+        if [[ -f "$stderr_file" && -s "$stderr_file" ]]; then
+            local content=$(cat "$stderr_file" 2>/dev/null)
+            # Check for quota patterns
+            if echo "$content" | grep -qi "limit reached\|quota exceeded\|rate limit\|usage limit\|too many requests\|resets 3am\|/upgrade to max\|/extra-usage"; then
+                ((quota_errors++))
+            fi
+        fi
+    done
+
+    return $quota_errors
+}
+
 # Summary
 if [[ $VERBOSE == true ]]; then
     echo ""
@@ -306,6 +329,42 @@ if [[ $VERBOSE == true ]]; then
         echo "Successful: $success_count"
         echo "Failed: $fail_count"
         echo "Logs saved to: $OUTPUT_DIR"
+
+        # Check for quota errors
+        check_quota_errors "$OUTPUT_DIR"
+        quota_count=$?
+
+        if [[ $quota_count -gt 0 ]]; then
+            echo ""
+            echo -e "\033[1;31m========================================================================================================\033[0m"
+            echo -e "\033[1;31m╔══════════════════════════════════════════════════════════════════════════════════════════════════╗\033[0m"
+            echo -e "\033[1;31m║                                                                                                  ║\033[0m"
+            echo -e "\033[1;31m║  ⚠️  API QUOTA/RATE LIMIT REACHED - $quota_count task(s) failed due to quota exhaustion  ⚠️               ║\033[0m"
+            echo -e "\033[1;31m║                                                                                                  ║\033[0m"
+            echo -e "\033[1;31m╚══════════════════════════════════════════════════════════════════════════════════════════════════╝\033[0m"
+            echo -e "\033[1;31m========================================================================================================\033[0m"
+            echo ""
+            echo -e "\033[1;33mWhat this means:\033[0m"
+            echo "  • Your LLM provider has run out of quota or hit a rate limit"
+            echo "  • All completed work ($success_count tasks) has been preserved"
+            echo ""
+            echo -e "\033[1;33mTo continue:\033[0m"
+            echo "  1. Wait for quota reset (typically resets hourly/daily, or 3am for Codex)"
+            echo "  2. Re-run the same command - resume will pick up where it left off"
+            echo "  3. Only the $quota_count failed tasks will be re-processed"
+            echo ""
+            echo -e "\033[1;33mAlternative options:\033[0m"
+            echo "  • Upgrade your LLM provider plan for higher limits"
+            echo "  • Switch to a different provider by editing overview.md"
+            echo ""
+            echo -e "\033[1;33mExample:\033[0m"
+            echo "  # Wait for reset, then simply re-run:"
+            echo "  ./mark_structured.sh assignments/your-assignment"
+            echo "  # Output: \"Generated $quota_count tasks (skipped $success_count already completed)\""
+            echo ""
+            echo -e "\033[1;31m========================================================================================================\033[0m"
+            echo ""
+        fi
     fi
 fi
 

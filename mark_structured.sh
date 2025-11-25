@@ -245,7 +245,7 @@ jq -r '.submissions[] | .path + "|" + .student_name' "$SUBMISSIONS_MANIFEST" | w
             :
         else
             # Add task to list
-            echo "python3 '$SRC_DIR/agents/marker.py' --activity A$activity --student '$student_name' --submission '$submission_path' --output '$output_file'" >> "$MARKER_TASKS"
+            echo "python3 '$SRC_DIR/agents/marker.py' --activity A$activity --student '$student_name' --submission '$submission_path' --output '$output_file' --provider '$DEFAULT_PROVIDER' ${DEFAULT_MODEL:+--model '$DEFAULT_MODEL'}" >> "$MARKER_TASKS"
         fi
     done
 done
@@ -359,7 +359,7 @@ jq -r '.submissions[] | .path + "|" + .student_name' "$SUBMISSIONS_MANIFEST" | w
         :
     else
         # Add task to list
-        echo "python3 '$SRC_DIR/agents/unifier.py' --student '$student_name' --submission '$submission_path' --scheme '$APPROVED_SCHEME' --output '$output_file'" >> "$UNIFIER_TASKS"
+        echo "python3 '$SRC_DIR/agents/unifier.py' --student '$student_name' --submission '$submission_path' --scheme '$APPROVED_SCHEME' --output '$output_file' --provider '$DEFAULT_PROVIDER' ${DEFAULT_MODEL:+--model '$DEFAULT_MODEL'}" >> "$UNIFIER_TASKS"
     fi
 done
 

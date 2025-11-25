@@ -222,6 +222,13 @@ Command: `codex`
 - `gpt-5.1-codex-max` - Maximum reasoning capability
 - `gpt-5.1-codex-mini` - Faster, cost-effective
 
+**Important:** Codex CLI requires a real terminal (TTY) for interactive mode. When using Codex:
+
+- Interactive agents (Pattern Designer, Aggregator) require running from a real terminal
+- Headless agents (Marker, Normalizer, Unifier) work in all contexts
+- Session capture is limited for interactive mode
+- For fully automated workflows, consider using Claude or Gemini instead
+
 ### Configuration Examples
 
 Specify in `overview.md`:

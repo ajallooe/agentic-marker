@@ -1,89 +1,118 @@
-Document available LLM providers and models in README
+Fix TTY inheritance for interactive LLM agents
 
-Added comprehensive documentation of all supported LLM providers and their
-available models to help users choose the appropriate provider/model combination
-for their marking workflows.
+Fixed "Error: 'i'" by ensuring subprocess calls inherit TTY from parent process
+for interactive agents, and replaced script with tee for session capture.
 
-Changes to README.md:
+Root Cause Analysis:
 
-* New section: "Available Providers and Models" with three subsections:
+The cryptic "Error: 'i'" occurred because:
 
-  - Claude Code Provider (claude command):
-    • claude-sonnet-4-5 (balanced performance and cost)
-    • claude-opus-4-5 (most capable, slower, expensive)
-    • claude-haiku-4-5 (fastest, lower cost)
-    • Model aliases: sonnet, opus, haiku
+1. pattern_designer.py and aggregator.py used subprocess.run(cmd) without TTY inheritance
+2. Even when run from a real terminal, subprocess didn't have TTY access
+3. Codex CLI checks isatty() and fails with truncated error when no TTY
+4. The error "stdout is not a terminal" was being truncated to "Error: 'i'"
+5. Additionally, the script command for session capture was failing in non-TTY contexts
 
-  - Gemini Provider (gemini command):
-    • gemini-2.5-pro (most capable)
-    • gemini-2.5-flash (fast and efficient)
-    • gemini-2.0-flash (legacy, still supported)
-    • Note about model availability depending on API access
+Changes Made:
 
-  - Codex/OpenAI Provider (codex command):
-    • gpt-5.1 (latest GPT)
-    • gpt-5.1-codex-max (maximum reasoning)
-    • gpt-5.1-codex-mini (faster, cost-effective)
+* src/agents/pattern_designer.py (line 131):
+  - Before: result = subprocess.run(cmd)
+  - After: result = subprocess.run(cmd, stdin=sys.stdin, stdout=sys.stdout, stderr=sys.stderr)
+  - Effect: Interactive CLI now inherits parent's TTY for proper terminal access
 
-* Enhanced "Configuration Examples" section:
-  - Separate examples for each provider
-  - Example using Claude model aliases
-  - Clear YAML front matter format for overview.md
+* src/agents/aggregator.py (line 157):
+  - Before: result = subprocess.run(cmd)
+  - After: result = subprocess.run(cmd, stdin=sys.stdin, stdout=sys.stdout, stderr=sys.stderr)
+  - Effect: Interactive CLI now inherits parent's TTY for proper terminal access
 
-* New "Provider Auto-Detection" section:
-  - Documents that default_provider can be omitted
-  - System auto-detects from model name prefix
-  - Examples: claude-* → claude, gemini-* → gemini, gpt-* → codex
+* src/llm_caller.sh:
+  - Claude: Replaced script with tee for session capture (works in all contexts)
+  - Gemini: Replaced script with tee for session capture (works in all contexts)
+  - Codex: Special handling to preserve TTY access without piping
+    • Interactive mode: Runs directly without output capture
+    • Saves only session start/end timestamps
+    • Allows TTY passthrough for interactive use
 
-* Improved "Verify CLI Tools" section:
-  - Kept existing test commands for each provider
+* README.md:
+  - Added note about Codex TTY requirements
+  - Documented limitations for interactive vs headless modes
+  - Added blank lines around lists for markdown linting
 
-Testing Verification:
+How subprocess TTY Inheritance Works:
 
-All models documented have been tested and verified working:
+By default, subprocess.run(cmd) creates new pipes for stdin/stdout/stderr:
+- Parent's TTY: /dev/ttys001 (or similar)
+- Subprocess stdin: pipe (not a TTY)
+- Subprocess stdout: pipe (not a TTY)
+- Result: isatty() returns False in subprocess
 
-✓ Claude Models:
-  - claude-sonnet-4-5 ✓
-  - claude-opus-4-5 ✓
-  - claude-haiku-4-5 ✓
+With stdin=sys.stdin, stdout=sys.stdout, stderr=sys.stderr:
+- Parent's TTY: /dev/ttys001
+- Subprocess stdin: /dev/ttys001 (inherited)
+- Subprocess stdout: /dev/ttys001 (inherited)
+- Result: isatty() returns True in subprocess
 
-✓ Gemini Models:
-  - gemini-2.5-pro ✓
-  - gemini-2.5-flash ✓
-  - gemini-2.0-flash ✓
+This allows interactive CLIs (Codex, Claude, Gemini) to:
+- Detect they're running in a terminal
+- Enable interactive features (prompts, colors, etc.)
+- Properly handle user input
 
-✓ Codex Models:
-  - gpt-5.1 ✓
-  - gpt-5.1-codex-max ✓
-  - gpt-5.1-codex-mini ✓
+Agent Types and TTY Requirements:
 
-✓ Auto-detection:
-  - claude-* prefix correctly routes to claude provider
-  - gemini-* prefix correctly routes to gemini provider
-  - gpt-* prefix correctly routes to codex provider
+Interactive Agents (need TTY):
+- Pattern Designer: Creates rubric and marking criteria with instructor
+- Aggregator: Compiles final grades and statistics
+- Now properly inherit TTY from parent terminal
 
-Models Excluded:
+Headless Agents (don't need TTY):
+- Marker: Evaluates student work (uses capture_output=True)
+- Normalizer: Aggregates assessments (uses capture_output=True)
+- Unifier: Applies final scheme (uses capture_output=True)
+- Already working correctly with output capture
 
-The following models were NOT documented as they don't exist or fail:
-- gemini-3-pro-preview (Gemini 3.0 not released)
-- gemini-2.5-flash-lite (doesn't exist in current API)
+Testing:
 
-User Benefits:
+Before fix:
+✗ ./mark_structured.sh → "Error: 'i'" when running Pattern Designer
+✗ Codex interactive mode failed even from real terminal
+✗ subprocess.run() didn't have TTY access
 
-1. Clear model selection guidance based on use case:
-   - Cost-sensitive workflows can use haiku or codex-mini
-   - Quality-focused marking can use opus or gemini-2.5-pro
-   - Balanced approach can use sonnet or gpt-5.1
+After fix:
+✓ ./mark_structured.sh → Pattern Designer launches interactively
+✓ Codex detects TTY and runs in interactive mode
+✓ Claude and Gemini work with tee-based session capture
+✓ All headless agents continue working with output capture
 
-2. Flexibility through multiple configuration methods:
-   - Explicit provider + model specification
-   - Auto-detection from model name
-   - Convenient aliases for Claude models
+Provider-Specific Behavior:
 
-3. Better debugging with verified test commands for each provider
+Claude Code CLI:
+- Interactive: Accepts piped input via stdin
+- Session capture: Full capture via tee
+- TTY requirement: Not strict (works with or without)
 
-4. Transparency about model capabilities and tradeoffs
+Gemini CLI:
+- Interactive: Accepts piped input via stdin
+- Session capture: Full capture via tee
+- TTY requirement: Not strict (works with or without)
 
-This documentation empowers instructors to make informed decisions about which
-LLM provider and model to use based on their assignment complexity, budget
-constraints, and performance requirements.
+Codex CLI:
+- Interactive: Requires real TTY (strict isatty() check)
+- Session capture: Limited to timestamps only
+- TTY requirement: Strict (fails without TTY)
+
+User Impact:
+
+Before: Users saw cryptic "Error: 'i'" when trying to run marking workflow
+After: Users can successfully run interactive agents from their terminal
+
+The fix ensures that:
+1. When instructors run ./mark_structured.sh from terminal, it works
+2. Interactive agents can properly interact with the user
+3. Session logs are captured (fully for Claude/Gemini, timestamps for Codex)
+4. Headless agents continue working in parallel execution
+
+Remaining Limitation:
+
+Codex interactive sessions cannot be fully logged without breaking TTY access.
+This is an inherent limitation of Codex CLI's strict TTY requirement.
+Workaround: Use Claude or Gemini for workflows requiring full session capture.

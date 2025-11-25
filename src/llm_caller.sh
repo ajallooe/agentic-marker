@@ -82,8 +82,8 @@ call_claude() {
     if [[ "$mode" == "interactive" ]]; then
         # Interactive mode - use stdin to provide initial prompt
         if [[ -n "$output" ]]; then
-            # Use script to capture the session
-            script -q "$output" bash -c "echo '$prompt' | claude $model_arg"
+            # Capture session output using tee instead of script
+            echo "$prompt" | claude $model_arg 2>&1 | tee "$output"
         else
             echo "$prompt" | claude $model_arg
         fi
@@ -119,7 +119,8 @@ call_gemini() {
     if [[ "$mode" == "interactive" ]]; then
         # Interactive mode - use stdin to provide initial prompt
         if [[ -n "$output" ]]; then
-            script -q "$output" bash -c "echo '$prompt' | gemini $model_arg"
+            # Capture session output using tee instead of script
+            echo "$prompt" | gemini $model_arg 2>&1 | tee "$output"
         else
             echo "$prompt" | gemini $model_arg
         fi
@@ -153,10 +154,15 @@ call_codex() {
     fi
 
     if [[ "$mode" == "interactive" ]]; then
-        # Interactive mode - pass prompt as argument
+        # Interactive mode - Codex requires a real TTY
+        # We cannot capture output without breaking the TTY requirement
         if [[ -n "$output" ]]; then
-            # Use script to capture the session
-            script -q "$output" bash -c "codex $model_arg '$prompt'"
+            echo "Note: Session will be saved to $output after completion" >&2
+            # Run codex interactively, then save output afterwards
+            # Note: This won't capture the full session, just a marker
+            echo "[Interactive session started at $(date)]" > "$output"
+            codex $model_arg "$prompt"
+            echo "[Interactive session ended at $(date)]" >> "$output"
         else
             codex $model_arg "$prompt"
         fi

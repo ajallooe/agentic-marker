@@ -127,7 +127,8 @@ def main():
         if args.model:
             cmd.extend(["--model", args.model])
 
-        result = subprocess.run(cmd)
+        # Inherit stdin/stdout/stderr to preserve TTY access for interactive CLI
+        result = subprocess.run(cmd, stdin=sys.stdin, stdout=sys.stdout, stderr=sys.stderr)
 
         if result.returncode != 0:
             print(f"\n✗ Pattern design session ended with errors", file=sys.stderr)

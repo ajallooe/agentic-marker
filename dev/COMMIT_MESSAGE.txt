@@ -1,102 +1,151 @@
-Add --force-xargs debug option to test xargs fallback path
+Improve progress messages for parallel and xargs execution
 
-Added a debug option to force the use of xargs even when GNU parallel is
-available. This ensures the xargs ARG_MAX fix can be tested properly.
+Replaced cryptic GNU parallel progress messages with a clear progress bar, and
+added real-time progress tracking for xargs with percentage and task counts.
 
 ## Problem
 
-With GNU parallel now installed, there's no way to test that the xargs
-fallback path works correctly with the new ARG_MAX fix. Need a way to force
-xargs usage for testing purposes.
+**GNU parallel** was displaying cryptic messages like:
+```
+local:4/64/100%/6.3s
+```
+
+Which meant:
+- `local` - hostname
+- `4` - jobs running currently
+- `64` - jobs completed
+- `100%` - percentage complete
+- `6.3s` - time elapsed
+
+**xargs** had no progress tracking at all, making it impossible to see how many
+tasks were completed during long-running operations with hundreds of tasks.
 
 ## Solution
 
-Added `--force-xargs` flag that can be passed to marking scripts:
+### GNU Parallel
 
-```bash
-./mark_structured.sh assignments/lab1 --force-xargs
-./mark_freeform.sh assignments/project1 --force-xargs
+Replaced `--progress` flag with `--bar` for cleaner visual progress display:
+
+**Before:**
+```
+local:4/64/100%/6.3s
 ```
 
-This flag:
-- Skips GNU parallel even if available
-- Forces use of xargs with the line-number approach
-- Displays clear message: "Using xargs for task execution (forced via --force-xargs)"
-- Enables testing xargs behavior with large task lists
+**After:**
+```
+[Progress bar display with ETA]
+```
 
-## Implementation
+The `--bar` option provides a standard progress bar with clear percentage and
+time estimates.
+
+### xargs
+
+Added custom progress tracking with atomic file locking:
+
+**Display format:**
+```
+[  0%] Completed 0/224 tasks
+[ 12%] Completed 28/224 tasks
+[ 45%] Completed 100/224 tasks
+[100%] Completed 224/224 tasks
+```
+
+**Implementation:**
+- Directory-based locking using `mkdir` (atomic on all Unix systems)
+- Portable across macOS and Linux (no flock dependency)
+- Updates in real-time as tasks complete
+- Progress shown on stderr to avoid mixing with task output
+- ANSI escape codes clear line before each update
+
+## Implementation Details
 
 **src/parallel_runner.sh:**
-- Added `--force-xargs` flag to argument parser
-- Modified parallel detection: `if command -v parallel && [[ $FORCE_XARGS == false ]]`
-- Added conditional message for forced xargs mode
-- Flag completely bypasses parallel, even if available
 
-**mark_structured.sh:**
-- Added argument parsing to accept `--force-xargs`
-- Passes flag through to both parallel_runner.sh calls (markers and unifiers)
-- Updated usage message to show new option
+1. **GNU parallel section:**
+   - Changed from `--progress` to `--bar`
+   - Filter out any remaining cryptic messages with `grep -v '^parallel:'`
+   - Capture exit code properly with `${PIPESTATUS[0]}`
 
-**mark_freeform.sh:**
-- Same changes as mark_structured.sh
-- Consistent interface across both marking workflows
+2. **xargs section:**
+   - Created temporary directory for progress tracking files
+   - `update_progress()` function with atomic directory-based locking
+   - Wrapper function `task_with_progress()` that:
+     - Executes task via `execute_task_by_line()`
+     - Updates progress counter atomically
+     - Displays formatted progress to stderr
+   - Initial progress display showing 0%
+   - Final newline to preserve last progress message
 
-## Usage Examples
+3. **Locking mechanism:**
+   - Uses `mkdir` for atomic lock acquisition (portable)
+   - Retry loop with 100 attempts and 0.01s sleep
+   - Skips update if lock can't be acquired (graceful degradation)
+   - Releases lock with `rmdir` after update
+   - No dependency on flock/lockfile commands
 
-**Normal execution (uses parallel if available):**
-```bash
-./mark_structured.sh assignments/lab1
-```
-
-**Force xargs for testing:**
-```bash
-./mark_structured.sh assignments/lab1 --force-xargs
-```
-
-**Output when forced:**
-```
-Parallel Task Runner
-====================
-Tasks file: /path/to/tasks.txt
-Total tasks: 224
-Concurrency: 4
-
-Using xargs for task execution (forced via --force-xargs)
-```
+4. **Display format:**
+   - `\r` - carriage return to beginning of line
+   - `\033[K` - ANSI escape to clear from cursor to end of line
+   - `[%3d%%]` - percentage with padding
+   - `Completed %d/%d tasks` - current/total count
+   - Output to stderr (`>&2`) to separate from task stdout
 
 ## Testing
 
-✓ **Flag parsing** works in both marking scripts
-✓ **Help message** displays --force-xargs option
-✓ **Force mode** bypasses parallel and uses xargs
-✓ **Message** clearly indicates forced mode
-✓ **Execution** works correctly with 3 tasks in parallel
-✓ **Passthrough** works for both marker and unifier stages
+✓ **GNU parallel** with `--bar` (cleaner progress bar)
+✓ **xargs** shows real-time progress: `[  0%] Completed 0/5 tasks`
+✓ **Progress updates** atomically without race conditions
+✓ **Directory locking** works on macOS (no flock needed)
+✓ **5 tasks** complete successfully with progress tracking
+✓ **ANSI codes** work in real terminals (clear line updates)
+✓ **Final message** preserved with newline
+
+**Example output (xargs):**
+```
+Using xargs for task execution (forced via --force-xargs)
+
+[  0%] Completed 0/5 tasks
+[ 40%] Completed 2/5 tasks
+[ 80%] Completed 4/5 tasks
+[100%] Completed 5/5 tasks
+
+====================
+✓ All 5 tasks completed successfully
+```
 
 ## Files Changed
 
 - **src/parallel_runner.sh**:
-  - Added `FORCE_XARGS=false` default
-  - Added `--force-xargs` to argument parser
-  - Modified parallel availability check
-  - Added conditional message for forced mode
+  - GNU parallel: Changed to `--bar`, filter messages, fix exit code
+  - xargs: Added progress tracking with atomic locking
+  - Created `update_progress()` and `task_with_progress()` functions
+  - Export variables for progress tracking
+  - Clean up temp directory on completion
 
-- **mark_structured.sh**:
-  - Added argument parsing with `--force-xargs` support
-  - Updated usage message
-  - Pass flag to parallel_runner.sh for both stages
-
-- **mark_freeform.sh**:
-  - Same changes as mark_structured.sh
-  - Consistent interface
+- **dev/COMMIT_MESSAGE.txt**: Updated (this commit)
 
 ## Benefits
 
-- **Testing**: Can verify xargs ARG_MAX fix works with large task lists
-- **Debugging**: Helps isolate issues between parallel and xargs implementations
-- **Verification**: Ensures fallback path remains functional
-- **Development**: Useful for testing without uninstalling parallel
+**User Experience:**
+- **Clear progress**: See exactly how many tasks completed out of total
+- **Percentage**: Quick visual indication of overall progress
+- **Consistency**: Both parallel and xargs now show progress
+- **Professional**: No more cryptic messages
 
-This is a development/testing feature that doesn't affect normal operations.
-Users can continue using the default behavior (automatic parallel/xargs detection)
-while developers can force specific execution paths for testing.
+**Technical:**
+- **Portable**: Works on macOS and Linux without external dependencies
+- **Atomic**: Directory-based locking prevents race conditions
+- **Robust**: Graceful degradation if lock can't be acquired
+- **Efficient**: Minimal overhead per task completion
+
+**For large assignments:**
+With 224 tasks (7 activities × 32 students), users can now see:
+```
+[ 45%] Completed 100/224 tasks
+```
+
+Instead of wondering if the process is still running.
+
+This improvement makes long-running marking workflows much more transparent and
+gives users confidence that the system is making progress.

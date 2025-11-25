@@ -261,6 +261,16 @@ The `assignments/sample-assignment/` directory contains example submissions demo
 - Falls back to xargs with concurrency
 - Final fallback to sequential execution
 
+**Progress Tracking**:
+
+Both parallel and xargs now show clear, user-friendly progress:
+
+- **GNU parallel**: Uses `--bar` flag for visual progress bar
+- **xargs**: Custom progress tracking with atomic locking
+  - Format: `[ 45%] Completed 100/224 tasks`
+  - Updates in real-time as tasks complete
+  - Uses directory-based locking (portable, no flock dependency)
+
 **ARG_MAX Handling**:
 
 The xargs implementation uses a line-number approach to avoid command-line length limits:

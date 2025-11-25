@@ -153,7 +153,8 @@ if command -v parallel &> /dev/null && [[ $FORCE_XARGS == false ]]; then
     PARALLEL_CMD+=" --line-buffer"
 
     if [[ $VERBOSE == true ]]; then
-        PARALLEL_CMD+=" --progress"
+        # Use --bar for cleaner progress display instead of cryptic --progress
+        PARALLEL_CMD+=" --bar"
         PARALLEL_CMD+=" --tag"
     fi
 
@@ -163,12 +164,12 @@ if command -v parallel &> /dev/null && [[ $FORCE_XARGS == false ]]; then
 
     # Execute with parallel
     if [[ -n "$COMMAND" ]]; then
-        cat "$TASKS_FILE" | eval "$PARALLEL_CMD" "$COMMAND"
+        cat "$TASKS_FILE" | eval "$PARALLEL_CMD" "$COMMAND" 2>&1 | grep -v '^parallel:'
     else
-        cat "$TASKS_FILE" | eval "$PARALLEL_CMD"
+        cat "$TASKS_FILE" | eval "$PARALLEL_CMD" 2>&1 | grep -v '^parallel:'
     fi
 
-    EXIT_CODE=$?
+    EXIT_CODE=${PIPESTATUS[0]}
 
 elif command -v xargs &> /dev/null; then
     # Fallback to xargs with concurrency
@@ -186,10 +187,74 @@ elif command -v xargs &> /dev/null; then
     # and read the actual command from the file inside the worker
     EXIT_CODE=0
 
-    if [[ -n "$COMMAND" ]]; then
-        seq 1 "$TOTAL_TASKS" | xargs -P "$CONCURRENCY" -I {} bash -c 'execute_task_by_line "{}" "'"$TASKS_FILE"'" "'"$OUTPUT_DIR"'" "'"$COMMAND"'"' || EXIT_CODE=$?
+    # Create a progress tracking mechanism for xargs
+    if [[ $VERBOSE == true ]]; then
+        PROGRESS_DIR=$(mktemp -d)
+        PROGRESS_COUNTER="$PROGRESS_DIR/counter"
+        PROGRESS_LOCK="$PROGRESS_DIR/lock"
+        echo "0" > "$PROGRESS_COUNTER"
+
+        # Function to update progress with directory-based locking (portable)
+        update_progress() {
+            # Use mkdir for atomic locking (works on all Unix systems)
+            local lockdir="$PROGRESS_LOCK"
+            local max_attempts=100
+            local attempt=0
+
+            while ! mkdir "$lockdir" 2>/dev/null && [ $attempt -lt $max_attempts ]; do
+                sleep 0.01
+                attempt=$((attempt + 1))
+            done
+
+            if [ $attempt -ge $max_attempts ]; then
+                # Couldn't get lock, skip this update
+                return 0
+            fi
+
+            # We have the lock
+            local current=$(cat "$PROGRESS_COUNTER" 2>/dev/null || echo "0")
+            local completed=$((current + 1))
+            echo "$completed" > "$PROGRESS_COUNTER"
+            local percent=$((completed * 100 / TOTAL_TASKS))
+            # Clear line and show progress (goes to stderr, separate from task output)
+            printf "\r\033[K[%3d%%] Completed %d/%d tasks" "$percent" "$completed" "$TOTAL_TASKS" >&2
+
+            # Release lock
+            rmdir "$lockdir" 2>/dev/null
+        }
+        export -f update_progress
+        export PROGRESS_COUNTER
+        export PROGRESS_LOCK
+        export TOTAL_TASKS
+
+        # Wrapper that calls task and updates progress
+        task_with_progress() {
+            execute_task_by_line "$@"
+            local result=$?
+            update_progress
+            return $result
+        }
+        export -f task_with_progress
+
+        # Show initial progress
+        printf "[  0%%] Completed 0/%d tasks" "$TOTAL_TASKS" >&2
+
+        if [[ -n "$COMMAND" ]]; then
+            seq 1 "$TOTAL_TASKS" | xargs -P "$CONCURRENCY" -I {} bash -c 'task_with_progress "{}" "'"$TASKS_FILE"'" "'"$OUTPUT_DIR"'" "'"$COMMAND"'"' || EXIT_CODE=$?
+        else
+            seq 1 "$TOTAL_TASKS" | xargs -P "$CONCURRENCY" -I {} bash -c 'task_with_progress "{}" "'"$TASKS_FILE"'" "'"$OUTPUT_DIR"'" ""' || EXIT_CODE=$?
+        fi
+
+        # Clean progress line and remove temp directory
+        echo "" >&2
+        rm -rf "$PROGRESS_DIR"
     else
-        seq 1 "$TOTAL_TASKS" | xargs -P "$CONCURRENCY" -I {} bash -c 'execute_task_by_line "{}" "'"$TASKS_FILE"'" "'"$OUTPUT_DIR"'" ""' || EXIT_CODE=$?
+        # Non-verbose mode - no progress tracking
+        if [[ -n "$COMMAND" ]]; then
+            seq 1 "$TOTAL_TASKS" | xargs -P "$CONCURRENCY" -I {} bash -c 'execute_task_by_line "{}" "'"$TASKS_FILE"'" "'"$OUTPUT_DIR"'" "'"$COMMAND"'"' || EXIT_CODE=$?
+        else
+            seq 1 "$TOTAL_TASKS" | xargs -P "$CONCURRENCY" -I {} bash -c 'execute_task_by_line "{}" "'"$TASKS_FILE"'" "'"$OUTPUT_DIR"'" ""' || EXIT_CODE=$?
+        fi
     fi
 
 else

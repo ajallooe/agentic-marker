@@ -54,7 +54,7 @@ After you create/validate the rubric, **display it clearly** and ask for instruc
 
 Once the rubric is approved, create detailed marking criteria documents for **each activity**.
 
-For each activity `A{i}`, create a markdown file with:
+For each activity `A{{i}}`, create a markdown file with:
 
 ## Activity Overview
 - What students were asked to do
@@ -84,12 +84,12 @@ For each activity `A{i}`, create a markdown file with:
 - Output format requirements
 - Any pre-filled code that shouldn't be changed
 
-**Output Format**: For each activity, create a separate file:
-- `processed/activities/A{i}_criteria.md`
+**Output Format**: For each activity, create a separate file at the following absolute path:
+- `{processed_dir}/activities/A{{i}}_criteria.md`
 
 ### Phase 4: Final Document
 
-Create `processed/rubric.md` containing:
+Create `{processed_dir}/rubric.md` containing:
 1. The complete rubric (approved by instructor)
 2. Summary of marking approach per activity
 3. Overall marking philosophy

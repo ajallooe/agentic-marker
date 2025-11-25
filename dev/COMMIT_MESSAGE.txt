@@ -1,29 +1,50 @@
-Fix TTY inheritance for interactive LLM agents
+Fix TTY inheritance, prompt template formatting, and file path handling
 
-Fixed "Error: 'i'" by ensuring subprocess calls inherit TTY from parent process
-for interactive agents, and replaced script with tee for session capture.
+Fixed "Error: 'i'" by escaping literal braces in prompt templates, ensuring
+subprocess calls inherit TTY from parent process, and providing absolute paths
+for agent-created files.
 
 Root Cause Analysis:
 
-The cryptic "Error: 'i'" occurred because:
+The cryptic "Error: 'i'" had TWO root causes, plus a file path issue:
 
-1. pattern_designer.py and aggregator.py used subprocess.run(cmd) without TTY inheritance
-2. Even when run from a real terminal, subprocess didn't have TTY access
-3. Codex CLI checks isatty() and fails with truncated error when no TTY
-4. The error "stdout is not a terminal" was being truncated to "Error: 'i'"
-5. Additionally, the script command for session capture was failing in non-TTY contexts
+1. **Primary**: Prompt template formatting error
+   - pattern_designer_structured.md contained `{i}` (lines 57, 88)
+   - Python's str.format() tried to substitute `{i}` as a placeholder
+   - Raised KeyError('i') when no value provided for 'i'
+   - Exception handler printed: "Error: 'i'"
+
+2. **Secondary**: Missing TTY inheritance
+   - pattern_designer.py and aggregator.py used subprocess.run(cmd) without TTY
+   - Even when run from real terminal, subprocess didn't have TTY access
+   - Would have caused "stdout is not a terminal" error once template was fixed
+
+3. **Tertiary**: Relative file paths in prompts
+   - Prompts told agent to create files at "processed/rubric.md"
+   - Agent created files relative to Codex's working directory
+   - Files were created in wrong location, causing rubric validation to fail
 
 Changes Made:
 
-* src/agents/pattern_designer.py (line 131):
-  - Before: result = subprocess.run(cmd)
-  - After: result = subprocess.run(cmd, stdin=sys.stdin, stdout=sys.stdout, stderr=sys.stderr)
-  - Effect: Interactive CLI now inherits parent's TTY for proper terminal access
+* src/prompts/pattern_designer_structured.md:
+  - Line 57, 88: Changed `{i}` to `{{i}}` to escape literal braces
+  - Line 88: Changed `processed/activities/A{{i}}_criteria.md` to `{processed_dir}/activities/A{{i}}_criteria.md`
+  - Line 92: Changed `processed/rubric.md` to `{processed_dir}/rubric.md`
+  - Effect: Template uses absolute paths provided by Python wrapper
 
-* src/agents/aggregator.py (line 157):
-  - Before: result = subprocess.run(cmd)
-  - After: result = subprocess.run(cmd, stdin=sys.stdin, stdout=sys.stdout, stderr=sys.stderr)
-  - Effect: Interactive CLI now inherits parent's TTY for proper terminal access
+* src/prompts/pattern_designer_freeform.md:
+  - Line 99: Changed `processed/marking_criteria.md` to `{processed_dir}/marking_criteria.md`
+  - Line 103: Changed `processed/rubric.md` to `{processed_dir}/rubric.md`
+  - Effect: Template uses absolute paths provided by Python wrapper
+
+* src/agents/pattern_designer.py:
+  - Line 92: Added `processed_dir=args.processed_dir` to format() call
+  - Line 131: Added `stdin=sys.stdin, stdout=sys.stdout, stderr=sys.stderr` to subprocess.run()
+  - Effect: Passes absolute processed directory path to template and inherits TTY
+
+* src/agents/aggregator.py:
+  - Line 157: Added `stdin=sys.stdin, stdout=sys.stdout, stderr=sys.stderr` to subprocess.run()
+  - Effect: Interactive CLI inherits parent's TTY for proper terminal access
 
 * src/llm_caller.sh:
   - Claude: Replaced script with tee for session capture (works in all contexts)
@@ -37,6 +58,32 @@ Changes Made:
   - Added note about Codex TTY requirements
   - Documented limitations for interactive vs headless modes
   - Added blank lines around lists for markdown linting
+
+Python String Formatting Gotcha:
+
+When using str.format() or f-strings, literal braces must be doubled:
+- `"A{i}"` → tries to substitute variable `i`
+- `"A{{i}}"` → renders as literal `A{i}`
+
+This affects:
+- Template strings with placeholders AND literal braces
+- Format strings that need to output curly braces
+- Any code using .format() or f-strings with mixed content
+
+File Path Best Practices:
+
+When instructing LLM agents to create files:
+- ✓ Use absolute paths: `/full/path/to/file.md`
+- ✗ Use relative paths: `processed/file.md`
+
+Relative paths are resolved from agent's current working directory, which may be:
+- User's home directory
+- System temp directory
+- LLM CLI's installation directory
+- Anywhere else depending on how the CLI was invoked
+
+Absolute paths ensure files are created in the correct location regardless of
+the agent's working directory.
 
 How subprocess TTY Inheritance Works:
 
@@ -73,13 +120,17 @@ Headless Agents (don't need TTY):
 Testing:
 
 Before fix:
-✗ ./mark_structured.sh → "Error: 'i'" when running Pattern Designer
-✗ Codex interactive mode failed even from real terminal
+✗ ./mark_structured.sh → "Error: 'i'" from KeyError in template formatting
+✗ Even after template fix → "Error: stdout is not a terminal"
+✗ Even after TTY fix → Files created in wrong directory, rubric validation fails
 ✗ subprocess.run() didn't have TTY access
 
 After fix:
 ✓ ./mark_structured.sh → Pattern Designer launches interactively
+✓ Template renders correctly with A{i} literal braces
 ✓ Codex detects TTY and runs in interactive mode
+✓ Files created at correct absolute paths
+✓ Rubric validation succeeds
 ✓ Claude and Gemini work with tee-based session capture
 ✓ All headless agents continue working with output capture
 
@@ -103,16 +154,21 @@ Codex CLI:
 User Impact:
 
 Before: Users saw cryptic "Error: 'i'" when trying to run marking workflow
-After: Users can successfully run interactive agents from their terminal
+After: Users can successfully run interactive agents and files are created correctly
 
 The fix ensures that:
-1. When instructors run ./mark_structured.sh from terminal, it works
-2. Interactive agents can properly interact with the user
-3. Session logs are captured (fully for Claude/Gemini, timestamps for Codex)
-4. Headless agents continue working in parallel execution
+1. Prompt templates format correctly without KeyError
+2. When instructors run ./mark_structured.sh from terminal, it works
+3. Interactive agents can properly interact with the user
+4. Files are created at the correct absolute paths
+5. Rubric validation succeeds after pattern design
+6. Session logs are captured (fully for Claude/Gemini, timestamps for Codex)
+7. Headless agents continue working in parallel execution
 
-Remaining Limitation:
-
-Codex interactive sessions cannot be fully logged without breaking TTY access.
-This is an inherent limitation of Codex CLI's strict TTY requirement.
-Workaround: Use Claude or Gemini for workflows requiring full session capture.
+Files Changed:
+- src/prompts/pattern_designer_structured.md (template escaping + absolute paths)
+- src/prompts/pattern_designer_freeform.md (absolute paths)
+- src/agents/pattern_designer.py (TTY inheritance + pass processed_dir to template)
+- src/agents/aggregator.py (TTY inheritance)
+- src/llm_caller.sh (session capture with tee/TTY handling)
+- README.md (documentation and linting)

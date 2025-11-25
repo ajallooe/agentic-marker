@@ -88,7 +88,8 @@ def main():
             assignment_overview=overview_content,
             rubric_status=rubric_status,
             existing_rubric=existing_rubric,
-            additional_materials="" if args.type == "structured" else "See overview file above"
+            additional_materials="" if args.type == "structured" else "See overview file above",
+            processed_dir=args.processed_dir
         )
 
         # Save prompt for debugging

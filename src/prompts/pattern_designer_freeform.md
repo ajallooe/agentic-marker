@@ -96,11 +96,11 @@ The document should include:
 - Documentation requirements (if any)
 
 **Output Format**: Create a single file:
-- `processed/marking_criteria.md`
+- `{processed_dir}/marking_criteria.md`
 
 ### Phase 4: Final Document
 
-Create `processed/rubric.md` containing:
+Create `{processed_dir}/rubric.md` containing:
 1. The complete rubric (approved by instructor)
 2. Summary of marking approach
 3. Overall marking philosophy

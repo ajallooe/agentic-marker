@@ -196,26 +196,58 @@ log_success "Found $NUM_ACTIVITIES activities"
 # STAGE 3: Marking Pattern Designer (Interactive)
 # ============================================================================
 
-log_info "Stage 3: Running Marking Pattern Designer (Interactive)..."
-log_warning "This stage requires instructor interaction"
+# Check if pattern design already complete
+RUBRIC_FILE="$PROCESSED_DIR/rubric.md"
+ACTIVITIES_DIR="$PROCESSED_DIR/activities"
 
-PATTERN_DESIGNER_SESSION="$SESSIONS_DIR/pattern_designer.log"
+if [[ $RESUME == true && -f "$RUBRIC_FILE" && -d "$ACTIVITIES_DIR" ]]; then
+    CRITERIA_COUNT=$(find "$ACTIVITIES_DIR" -name "A*_criteria.md" 2>/dev/null | wc -l | tr -d ' ')
+    if [[ $CRITERIA_COUNT -ge $NUM_ACTIVITIES ]]; then
+        log_info "Stage 3: Skipping (rubric and $CRITERIA_COUNT activity criteria files already exist)"
+    else
+        log_info "Stage 3: Running Marking Pattern Designer (Interactive)..."
+        log_warning "This stage requires instructor interaction (found only $CRITERIA_COUNT/$NUM_ACTIVITIES criteria files)"
 
-python3 "$SRC_DIR/agents/pattern_designer.py" \
-    --base-notebook "$BASE_NOTEBOOK" \
-    --overview "$OVERVIEW_FILE" \
-    --processed-dir "$PROCESSED_DIR" \
-    --session-log "$PATTERN_DESIGNER_SESSION" \
-    --provider "$DEFAULT_PROVIDER" \
-    ${DEFAULT_MODEL:+--model "$DEFAULT_MODEL"} \
-    --type structured
+        PATTERN_DESIGNER_SESSION="$SESSIONS_DIR/pattern_designer.log"
 
-if [[ $? -ne 0 ]]; then
-    log_error "Pattern designer failed"
-    exit 1
+        python3 "$SRC_DIR/agents/pattern_designer.py" \
+            --base-notebook "$BASE_NOTEBOOK" \
+            --overview "$OVERVIEW_FILE" \
+            --processed-dir "$PROCESSED_DIR" \
+            --session-log "$PATTERN_DESIGNER_SESSION" \
+            --provider "$DEFAULT_PROVIDER" \
+            ${DEFAULT_MODEL:+--model "$DEFAULT_MODEL"} \
+            --type structured
+
+        if [[ $? -ne 0 ]]; then
+            log_error "Pattern designer failed"
+            exit 1
+        fi
+
+        log_success "Pattern design complete"
+    fi
+else
+    log_info "Stage 3: Running Marking Pattern Designer (Interactive)..."
+    log_warning "This stage requires instructor interaction"
+
+    PATTERN_DESIGNER_SESSION="$SESSIONS_DIR/pattern_designer.log"
+
+    python3 "$SRC_DIR/agents/pattern_designer.py" \
+        --base-notebook "$BASE_NOTEBOOK" \
+        --overview "$OVERVIEW_FILE" \
+        --processed-dir "$PROCESSED_DIR" \
+        --session-log "$PATTERN_DESIGNER_SESSION" \
+        --provider "$DEFAULT_PROVIDER" \
+        ${DEFAULT_MODEL:+--model "$DEFAULT_MODEL"} \
+        --type structured
+
+    if [[ $? -ne 0 ]]; then
+        log_error "Pattern designer failed"
+        exit 1
+    fi
+
+    log_success "Pattern design complete"
 fi
-
-log_success "Pattern design complete"
 
 # Verify required files were created
 if [[ ! -f "$PROCESSED_DIR/rubric.md" ]]; then
@@ -267,6 +299,12 @@ fi
 
 # Run markers in parallel
 if [[ $TASKS_TO_RUN -gt 0 ]]; then
+    # Clear marker_logs to avoid counting old stdout files in progress calculation
+    if [[ $RESUME == true ]]; then
+        rm -rf "$LOGS_DIR/marker_logs"
+        mkdir -p "$LOGS_DIR/marker_logs"
+    fi
+
     PARALLEL_ARGS=(
         --tasks "$MARKER_TASKS"
         --concurrency "$MAX_PARALLEL"
@@ -372,6 +410,10 @@ else
     if [[ $RESUME == true ]]; then
         UNIFIER_SKIPPED=$((NUM_STUDENTS - UNIFIER_TASKS_TO_RUN))
         log_info "Generated $UNIFIER_TASKS_TO_RUN unifier tasks (skipped $UNIFIER_SKIPPED already completed)"
+
+        # Clear unifier_logs to avoid counting old stdout files in progress calculation
+        rm -rf "$LOGS_DIR/unifier_logs"
+        mkdir -p "$LOGS_DIR/unifier_logs"
     else
         log_info "Generated $UNIFIER_TASKS_TO_RUN unifier tasks"
     fi

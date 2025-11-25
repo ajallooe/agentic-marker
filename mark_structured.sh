@@ -118,10 +118,10 @@ get_stage_model() {
     local stage="$1"
     local stage_var="STAGE_MODEL_${stage^^}"  # Convert to uppercase
 
-    # Check if stage-specific model is set
-    if [[ -n "${!stage_var}" ]]; then
+    # Check if stage-specific model is set (use :- to handle unset variables)
+    if [[ -n "${!stage_var:-}" ]]; then
         echo "${!stage_var}"
-    elif [[ -n "$DEFAULT_MODEL" ]]; then
+    elif [[ -n "${DEFAULT_MODEL:-}" ]]; then
         echo "$DEFAULT_MODEL"
     else
         echo ""

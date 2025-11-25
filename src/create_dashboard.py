@@ -30,12 +30,11 @@ def create_dashboard_notebook(
     Returns:
         Path to created notebook
     """
-    # Load data
+    # Load data to get activity marks
     with open(normalized_data_path, 'r') as f:
         normalized_data = json.load(f)
 
-    with open(student_mappings_path, 'r') as f:
-        student_mappings = json.load(f)
+    activity_marks = normalized_data.get('activity_marks', {})
 
     # Create notebook structure
     notebook = {
@@ -66,10 +65,13 @@ This interactive dashboard allows you to:
 4. Approve final marking scheme
 
 **Assignment Type**: {assignment_type.title()}
+**Activity Allocations**: {', '.join([f'{k}={v}' for k, v in sorted(activity_marks.items())])}
     """.strip()))
 
-    # Setup cell
+    # Cell 1: Imports
     notebook["cells"].append(_code_cell("""
+# @title Import Required Libraries
+
 import json
 import pandas as pd
 import numpy as np
@@ -78,48 +80,103 @@ from ipywidgets import interact, interactive, fixed, interact_manual, widgets
 from IPython.display import display, clear_output
 import ipywidgets as widgets
 from pathlib import Path
+    """))
+
+    # Cell 2: Plotting setup
+    notebook["cells"].append(_code_cell("""
+# @title Configure Plotting and Display Settings
 
 # Set up plotting
 %matplotlib inline
 plt.style.use('seaborn-v0_8-darkgrid')
 
-# Load data
+# Configure pandas to show all rows
+pd.set_option('display.max_rows', None)
+pd.set_option('display.max_columns', None)
+pd.set_option('display.width', None)
+pd.set_option('display.max_colwidth', 100)
+    """))
+
+    # Cell 3: Load data
+    notebook["cells"].append(_code_cell(f"""
+# @title Load Scoring Data and Student Mappings
+
+# Load normalized scoring data
 with open('{normalized_data_path}', 'r') as f:
     normalized_data = json.load(f)
 
+# Load per-student mappings
 with open('{student_mappings_path}', 'r') as f:
     student_mappings = json.load(f)
+    """))
+
+    # Cell 4: Extract and display summary
+    notebook["cells"].append(_code_cell("""
+# @title Extract Data and Display Summary
 
 # Extract mistakes and positives
 mistakes = normalized_data.get('mistakes', [])
 positives = normalized_data.get('positives', [])
 total_marks = normalized_data.get('total_marks', 100)
+activity_marks = normalized_data.get('activity_marks', {})
 
-print(f"Loaded {{len(mistakes)}} mistake types and {{len(positives)}} positive types")
-print(f"Total marks available: {{total_marks}}")
-    """.format(
-        normalized_data_path=normalized_data_path,
-        student_mappings_path=student_mappings_path
-    )))
+# Remove metadata from student mappings
+students = {k: v for k, v in student_mappings.items() if not k.startswith('_')}
+
+print(f"✓ Loaded {len(mistakes)} mistake types and {len(positives)} positive types")
+print(f"✓ Total marks available: {total_marks}")
+print(f"✓ Activity allocations: {activity_marks}")
+print(f"✓ Students with mappings: {len(students)}")
+    """))
 
     # Mistakes table cell
-    notebook["cells"].append(_markdown_cell("## Mistake Deductions\n\nAdjust the mark deductions for each mistake type:"))
+    notebook["cells"].append(_markdown_cell("## Mistake Deductions\n\nReview the mark deductions for each mistake type:"))
 
     notebook["cells"].append(_code_cell("""
+# @title Display Mistakes Table
+
 # Create DataFrame for mistakes
 mistakes_df = pd.DataFrame(mistakes)
+
+# Rename columns for better readability
+mistakes_df_display = mistakes_df.rename(columns={
+    'id': 'ID',
+    'description': 'Description',
+    'frequency': 'Students Affected',
+    'severity': 'Severity (1-10)',
+    'suggested_deduction': 'Suggested Deduction (marks)',
+    'activity': 'Activity',
+    'activity_marks': 'Activity Total (marks)'
+})
+
 print(f"Total mistake types: {len(mistakes_df)}")
-display(mistakes_df[['id', 'description', 'frequency', 'severity', 'suggested_deduction']])
+display(mistakes_df_display[['ID', 'Activity', 'Activity Total (marks)', 'Description',
+                               'Students Affected', 'Severity (1-10)', 'Suggested Deduction (marks)']])
     """))
 
     # Positives table cell
-    notebook["cells"].append(_markdown_cell("## Positive Bonuses\n\nAdjust bonus points for positive achievements:"))
+    notebook["cells"].append(_markdown_cell("## Positive Bonuses\n\nReview bonus points for positive achievements:"))
 
     notebook["cells"].append(_code_cell("""
+# @title Display Positives Table
+
 # Create DataFrame for positives
 positives_df = pd.DataFrame(positives)
+
+# Rename columns for better readability
+positives_df_display = positives_df.rename(columns={
+    'id': 'ID',
+    'description': 'Description',
+    'frequency': 'Students Demonstrating',
+    'quality': 'Quality (1-10)',
+    'suggested_bonus': 'Suggested Bonus (marks)',
+    'activity': 'Activity',
+    'activity_marks': 'Activity Total (marks)'
+})
+
 print(f"Total positive types: {len(positives_df)}")
-display(positives_df[['id', 'description', 'frequency', 'quality', 'suggested_bonus']])
+display(positives_df_display[['ID', 'Activity', 'Activity Total (marks)', 'Description',
+                               'Students Demonstrating', 'Quality (1-10)', 'Suggested Bonus (marks)']])
     """))
 
     # Interactive adjustment cell
@@ -130,45 +187,89 @@ Use the sliders below to adjust deductions and bonuses. The distribution will up
     """))
 
     notebook["cells"].append(_code_cell("""
-# Create adjustment widgets
+# @title Create Adjustment Sliders for Mistakes
+
+# Create adjustment widgets for mistakes
 mistake_widgets = {}
 for _, mistake in mistakes_df.iterrows():
     mistake_id = mistake['id']
+    description = mistake['description']
     suggested = float(mistake['suggested_deduction'])
+    activity_id = mistake['activity']
+    activity_total = mistake.get('activity_marks', 100)
+
+    # Truncate description for display
+    desc_short = description[:60] + '...' if len(description) > 60 else description
+
+    # Create label with activity context
+    label = f"{mistake_id} ({activity_total}marks): {desc_short}"
+
     mistake_widgets[mistake_id] = widgets.FloatSlider(
         value=suggested,
         min=0,
-        max=min(suggested * 2, total_marks),
+        max=activity_total,  # Max is the total marks for this activity
         step=0.5,
-        description=f"{mistake_id}:",
-        style={'description_width': '100px'},
-        layout=widgets.Layout(width='500px')
+        description=mistake_id,
+        style={'description_width': '120px'},
+        layout=widgets.Layout(width='800px'),
+        continuous_update=False
     )
 
+    # Display with full label
+    display(widgets.HTML(f"<b>{label}</b>"))
+    display(mistake_widgets[mistake_id])
+
+print(f"\\n✓ Created {len(mistake_widgets)} mistake adjustment sliders")
+    """))
+
+    notebook["cells"].append(_code_cell("""
+# @title Create Adjustment Sliders for Positives
+
+# Create adjustment widgets for positives
 positive_widgets = {}
 for _, positive in positives_df.iterrows():
     positive_id = positive['id']
+    description = positive['description']
     suggested = float(positive['suggested_bonus'])
+    activity_id = positive['activity']
+    activity_total = positive.get('activity_marks', 10)
+
+    # Truncate description for display
+    desc_short = description[:60] + '...' if len(description) > 60 else description
+
+    # Create label with activity context
+    label = f"{positive_id} ({activity_total}marks): {desc_short}"
+
     positive_widgets[positive_id] = widgets.FloatSlider(
         value=suggested,
         min=0,
-        max=min(suggested * 2, 10),
+        max=min(suggested * 2, 10),  # Bonuses typically smaller
         step=0.5,
-        description=f"{positive_id}:",
-        style={'description_width': '100px'},
-        layout=widgets.Layout(width='500px')
+        description=positive_id,
+        style={'description_width': '120px'},
+        layout=widgets.Layout(width='800px'),
+        continuous_update=False
     )
 
-print("Adjustment widgets created")
+    # Display with full label
+    display(widgets.HTML(f"<b>{label}</b>"))
+    display(positive_widgets[positive_id])
+
+print(f"\\n✓ Created {len(positive_widgets)} positive adjustment sliders")
     """))
 
     # Calculation function
     notebook["cells"].append(_code_cell("""
+# @title Define Mark Calculation Functions
+
 def calculate_marks(**kwargs):
     \"\"\"Calculate marks for all students based on current adjustments.\"\"\"
     marks = {}
 
-    for student_name, mapping in student_mappings.items():
+    # Filter out metadata keys
+    student_data = {k: v for k, v in students.items() if not k.startswith('_')}
+
+    for student_name, mapping in student_data.items():
         student_mark = total_marks
 
         # Apply mistake deductions
@@ -189,6 +290,10 @@ def calculate_marks(**kwargs):
 
 def plot_distribution(marks_dict):
     \"\"\"Plot histogram of mark distribution.\"\"\"
+    if not marks_dict:
+        print("⚠️  No student data available for distribution")
+        return
+
     marks = list(marks_dict.values())
 
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
@@ -229,7 +334,8 @@ def plot_distribution(marks_dict):
     print(f"  Max: {np.max(marks):.2f} / {total_marks}")
     print(f"\\nGrade Distribution:")
     for band, count in grade_bands.items():
-        print(f"  {band}: {count} students ({count/len(marks)*100:.1f}%)")
+        percentage = (count/len(marks)*100) if len(marks) > 0 else 0
+        print(f"  {band}: {count} students ({percentage:.1f}%)")
 
 def update_display(**kwargs):
     \"\"\"Update marks and distribution based on current widget values.\"\"\"
@@ -238,22 +344,7 @@ def update_display(**kwargs):
     plot_distribution(marks)
     return marks
 
-print("Calculation functions defined")
-    """))
-
-    # Display widgets
-    notebook["cells"].append(_markdown_cell("### Mistake Deductions"))
-
-    notebook["cells"].append(_code_cell("""
-for mistake_id, widget in mistake_widgets.items():
-    display(widget)
-    """))
-
-    notebook["cells"].append(_markdown_cell("### Positive Bonuses"))
-
-    notebook["cells"].append(_code_cell("""
-for positive_id, widget in positive_widgets.items():
-    display(widget)
+print("✓ Calculation functions defined")
     """))
 
     # Interactive display
@@ -264,8 +355,14 @@ The chart below updates as you adjust sliders above. Click "Update Distribution"
     """))
 
     notebook["cells"].append(_code_cell("""
+# @title Display Mark Distribution (Interactive)
+
 # Create update button
-update_button = widgets.Button(description="Update Distribution")
+update_button = widgets.Button(
+    description="Update Distribution",
+    button_style='success',
+    icon='refresh'
+)
 output = widgets.Output()
 
 def on_update_click(b):
@@ -291,10 +388,13 @@ Once you're satisfied with the mark distribution, run the cell below to save the
     """))
 
     notebook["cells"].append(_code_cell("""
+# @title Save Approved Marking Scheme
+
 def save_approved_scheme(output_path='approved_scheme.json'):
     \"\"\"Save the approved marking scheme.\"\"\"
     scheme = {
         'total_marks': total_marks,
+        'activity_marks': activity_marks,
         'mistakes': {},
         'positives': {},
         'timestamp': pd.Timestamp.now().isoformat()
@@ -310,6 +410,8 @@ def save_approved_scheme(output_path='approved_scheme.json'):
         json.dump(scheme, f, indent=2)
 
     print(f"✓ Approved scheme saved to: {output_path}")
+    print(f"  - {len(scheme['mistakes'])} mistake deductions")
+    print(f"  - {len(scheme['positives'])} positive bonuses")
     print(f"\\nYou may now close this notebook and continue the marking process.")
 
     return scheme

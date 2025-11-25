@@ -257,9 +257,17 @@ The `assignments/sample-assignment/` directory contains example submissions demo
 
 **Implementation**:
 
-- Uses GNU parallel if available
+- Uses GNU parallel if available (best performance and features)
 - Falls back to xargs with concurrency
 - Final fallback to sequential execution
+
+**ARG_MAX Handling**:
+
+The xargs implementation uses a line-number approach to avoid command-line length limits:
+- Passes line numbers (1, 2, 3, ... N) through xargs instead of full command lines
+- Workers read actual commands from file using `sed -n "${line_num}p"`
+- Avoids ARG_MAX errors when processing hundreds of tasks with long file paths
+- Critical for large structured assignments (e.g., 7 activities × 32 students = 224 tasks)
 
 ### CLI Tool Integration
 

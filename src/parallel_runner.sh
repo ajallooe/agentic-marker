@@ -114,8 +114,25 @@ execute_task() {
     return $exit_code
 }
 
-# Export function for use in subshells
+# Wrapper function that reads task from file by line number
+# This avoids ARG_MAX issues with long command lines
+execute_task_by_line() {
+    local line_num="$1"
+    local tasks_file="$2"
+    local output_dir="$3"
+    local command="$4"
+
+    # Read the specific line from the tasks file
+    local task=$(sed -n "${line_num}p" "$tasks_file")
+
+    if [[ -n "$task" ]]; then
+        execute_task "$task" "$line_num" "$output_dir" "$command"
+    fi
+}
+
+# Export functions for use in subshells
 export -f execute_task
+export -f execute_task_by_line
 
 # Check if GNU parallel is available
 if command -v parallel &> /dev/null; then
@@ -155,17 +172,16 @@ elif command -v xargs &> /dev/null; then
         echo ""
     fi
 
-    # Build xargs command
-    XARGS_CMD="xargs -P $CONCURRENCY -I {}"
+    # Use xargs with line numbers to avoid ARG_MAX issues
+    # Instead of passing the command line through xargs, we pass line numbers
+    # and read the actual command from the file inside the worker
+    EXIT_CODE=0
 
-    # Execute with xargs
     if [[ -n "$COMMAND" ]]; then
-        cat "$TASKS_FILE" | $XARGS_CMD bash -c "execute_task \"{}\" \"\$RANDOM\" \"$OUTPUT_DIR\" \"$COMMAND\""
+        seq 1 "$TOTAL_TASKS" | xargs -P "$CONCURRENCY" -I {} bash -c 'execute_task_by_line "{}" "'"$TASKS_FILE"'" "'"$OUTPUT_DIR"'" "'"$COMMAND"'"' || EXIT_CODE=$?
     else
-        cat "$TASKS_FILE" | $XARGS_CMD bash -c "execute_task \"{}\" \"\$RANDOM\" \"$OUTPUT_DIR\" \"\""
+        seq 1 "$TOTAL_TASKS" | xargs -P "$CONCURRENCY" -I {} bash -c 'execute_task_by_line "{}" "'"$TASKS_FILE"'" "'"$OUTPUT_DIR"'" ""' || EXIT_CODE=$?
     fi
-
-    EXIT_CODE=$?
 
 else
     # Sequential fallback if neither parallel nor xargs available

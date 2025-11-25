@@ -108,9 +108,42 @@ eval "$("$SRC_DIR/utils/config_parser.py" "$OVERVIEW_FILE" --bash)"
 
 log_info "Configuration:"
 log_info "  Provider: $DEFAULT_PROVIDER"
-log_info "  Model: ${DEFAULT_MODEL:-default}"
+log_info "  Default model: ${DEFAULT_MODEL:-default}"
 log_info "  Max parallel: $MAX_PARALLEL"
 log_info "  Total marks: $TOTAL_MARKS"
+
+# Function to get model for a specific stage
+# Priority: stage-specific > assignment default > none (use provider default)
+get_stage_model() {
+    local stage="$1"
+    local stage_var="STAGE_MODEL_${stage^^}"  # Convert to uppercase
+
+    # Check if stage-specific model is set
+    if [[ -n "${!stage_var}" ]]; then
+        echo "${!stage_var}"
+    elif [[ -n "$DEFAULT_MODEL" ]]; then
+        echo "$DEFAULT_MODEL"
+    else
+        echo ""
+    fi
+}
+
+# Determine models for each stage
+MODEL_PATTERN_DESIGNER=$(get_stage_model "pattern_designer")
+MODEL_MARKER=$(get_stage_model "marker")
+MODEL_NORMALIZER=$(get_stage_model "normalizer")
+MODEL_UNIFIER=$(get_stage_model "unifier")
+MODEL_AGGREGATOR=$(get_stage_model "aggregator")
+
+# Log stage-specific models if any are set
+if [[ -n "$MODEL_PATTERN_DESIGNER" || -n "$MODEL_MARKER" || -n "$MODEL_NORMALIZER" || -n "$MODEL_UNIFIER" || -n "$MODEL_AGGREGATOR" ]]; then
+    log_info "Stage-specific models:"
+    [[ -n "$MODEL_PATTERN_DESIGNER" ]] && log_info "  Pattern Designer: $MODEL_PATTERN_DESIGNER"
+    [[ -n "$MODEL_MARKER" ]] && log_info "  Marker: $MODEL_MARKER"
+    [[ -n "$MODEL_NORMALIZER" ]] && log_info "  Normalizer: $MODEL_NORMALIZER"
+    [[ -n "$MODEL_UNIFIER" ]] && log_info "  Unifier: $MODEL_UNIFIER"
+    [[ -n "$MODEL_AGGREGATOR" ]] && log_info "  Aggregator: $MODEL_AGGREGATOR"
+fi
 
 # Setup directories
 PROCESSED_DIR="$ASSIGNMENT_DIR/processed"
@@ -221,7 +254,7 @@ if [[ $RESUME == true && -f "$RUBRIC_FILE" && -d "$ACTIVITIES_DIR" ]]; then
             --processed-dir "$PROCESSED_DIR" \
             --session-log "$PATTERN_DESIGNER_SESSION" \
             --provider "$DEFAULT_PROVIDER" \
-            ${DEFAULT_MODEL:+--model "$DEFAULT_MODEL"} \
+            ${MODEL_PATTERN_DESIGNER:+--model "$MODEL_PATTERN_DESIGNER"} \
             --type structured
 
         if [[ $? -ne 0 ]]; then
@@ -243,7 +276,7 @@ else
         --processed-dir "$PROCESSED_DIR" \
         --session-log "$PATTERN_DESIGNER_SESSION" \
         --provider "$DEFAULT_PROVIDER" \
-        ${DEFAULT_MODEL:+--model "$DEFAULT_MODEL"} \
+        ${MODEL_PATTERN_DESIGNER:+--model "$MODEL_PATTERN_DESIGNER"} \
         --type structured
 
     if [[ $? -ne 0 ]]; then
@@ -282,7 +315,7 @@ jq -r '.submissions[] | .path + "|" + .student_name' "$SUBMISSIONS_MANIFEST" | w
             :
         else
             # Add task to list
-            echo "python3 '$SRC_DIR/agents/marker.py' --activity A$activity --student '$student_name' --submission '$submission_path' --output '$output_file' --provider '$DEFAULT_PROVIDER' ${DEFAULT_MODEL:+--model '$DEFAULT_MODEL'}" >> "$MARKER_TASKS"
+            echo "python3 '$SRC_DIR/agents/marker.py' --activity A$activity --student '$student_name' --submission '$submission_path' --output '$output_file' --provider '$DEFAULT_PROVIDER' ${MODEL_MARKER:+--model '$MODEL_MARKER'}" >> "$MARKER_TASKS"
         fi
     done
 done
@@ -349,7 +382,7 @@ for activity in $(seq 1 $NUM_ACTIVITIES); do
             --processed-dir "$PROCESSED_DIR" \
             --output "$SCORING_OUTPUT" \
             --provider "$DEFAULT_PROVIDER" \
-            ${DEFAULT_MODEL:+--model "$DEFAULT_MODEL"} \
+            ${MODEL_NORMALIZER:+--model "$MODEL_NORMALIZER"} \
             --type structured
 
         if [[ $? -ne 0 ]]; then
@@ -428,7 +461,7 @@ jq -r '.submissions[] | .path + "|" + .student_name' "$SUBMISSIONS_MANIFEST" | w
         :
     else
         # Add task to list
-        echo "python3 '$SRC_DIR/agents/unifier.py' --student '$student_name' --submission '$submission_path' --scheme '$APPROVED_SCHEME' --output '$output_file' --provider '$DEFAULT_PROVIDER' ${DEFAULT_MODEL:+--model '$DEFAULT_MODEL'}" >> "$UNIFIER_TASKS"
+        echo "python3 '$SRC_DIR/agents/unifier.py' --student '$student_name' --submission '$submission_path' --scheme '$APPROVED_SCHEME' --output '$output_file' --provider '$DEFAULT_PROVIDER' ${MODEL_UNIFIER:+--model '$MODEL_UNIFIER'}" >> "$UNIFIER_TASKS"
     fi
 done
 
@@ -485,7 +518,7 @@ else
         --output-dir "$FINAL_DIR" \
         --session-log "$AGGREGATOR_SESSION" \
         --provider "$DEFAULT_PROVIDER" \
-        ${DEFAULT_MODEL:+--model "$DEFAULT_MODEL"} \
+        ${MODEL_AGGREGATOR:+--model "$MODEL_AGGREGATOR"} \
         --type structured \
         --total-marks "$TOTAL_MARKS"
 

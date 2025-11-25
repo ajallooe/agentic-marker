@@ -483,7 +483,7 @@ def _code_cell(code: str) -> Dict:
         "execution_count": None,
         "metadata": {},
         "outputs": [],
-        "source": code.split('\n')
+        "source": code.strip().split('\n')
     }
 
 

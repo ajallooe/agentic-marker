@@ -73,7 +73,7 @@ First Markdown Cells (for context):
     return summary
 
 
-def create_prompt(notebook_path: Path, notebook_summary: str) -> str:
+def create_prompt(notebook_path: Path, notebook_summary: str, model: str) -> str:
     """Create the prompt for the LLM to generate overview.md."""
 
     prompt = f"""You are analyzing a Jupyter notebook assignment to create an overview.md configuration file.
@@ -88,11 +88,19 @@ Your task is to create an overview.md file with the following structure:
 ```markdown
 ---
 default_provider: claude
-default_model: claude-sonnet-4-5
+default_model: {model}
 max_parallel: 4
 base_file: <notebook_filename>
 assignment_type: <structured or freeform>
 total_marks: <total_marks>
+
+# Per-stage model overrides (optional - use assignment default_model for all stages)
+stage_models:
+  pattern_designer: {model}
+  marker: {model}
+  normalizer: {model}
+  unifier: {model}
+  aggregator: {model}
 ---
 
 # <Assignment Title>
@@ -128,19 +136,21 @@ IMPORTANT INSTRUCTIONS:
 
 3. **default_provider**: Keep as "claude" unless you have a reason to change
 
-4. **default_model**: Use "claude-sonnet-4-5" as default
+4. **default_model**: Use "{model}" (the model you're currently running on)
 
-5. **max_parallel**: Keep as 4 (good default for most systems)
+5. **stage_models**: Set all stages to use "{model}" (the same model)
 
-6. **total_marks**: Estimate based on the assignment complexity (typically 100)
+6. **max_parallel**: Keep as 4 (good default for most systems)
 
-7. **Assignment Overview**: Write a clear 2-3 sentence description
+7. **total_marks**: Estimate based on the assignment complexity (typically 100)
 
-8. **Learning Objectives**: List 3-5 key learning objectives based on the notebook content
+8. **Assignment Overview**: Write a clear 2-3 sentence description
 
-9. **Assignment Structure**: Describe whether it's structured or free-form, and list activities if applicable
+9. **Learning Objectives**: List 3-5 key learning objectives based on the notebook content
 
-10. **Grading Criteria**: Provide a breakdown of how marks should be distributed (e.g., 60% correctness, 20% code quality, 20% understanding)
+10. **Assignment Structure**: Describe whether it's structured or free-form, and list activities if applicable
+
+11. **Grading Criteria**: Provide a breakdown of how marks should be distributed (e.g., 60% correctness, 20% code quality, 20% understanding)
 
 Please analyze the notebook summary above and generate ONLY the overview.md content. Do not include any additional commentary or explanation - just output the markdown content that should go into overview.md.
 
@@ -256,7 +266,7 @@ Examples:
     print()
 
     # Create prompt
-    prompt = create_prompt(notebook_path, notebook_summary)
+    prompt = create_prompt(notebook_path, notebook_summary, args.model)
 
     # Call LLM to generate overview
     print("Calling LLM to generate overview.md...")

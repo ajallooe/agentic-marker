@@ -180,12 +180,105 @@ max_parallel: 4
 base_file: lab1_base.ipynb
 assignment_type: structured
 total_marks: 100
+
+# Per-stage model overrides (optional)
+stage_models:
+  pattern_designer: claude-sonnet-4-5
+  marker: claude-sonnet-4
+  normalizer: claude-sonnet-4-5
+  unifier: claude-sonnet-4
+  aggregator: claude-sonnet-4-5
 ---
 
 # Assignment Description
 
 [Your assignment description here...]
 ```
+
+### Per-Stage Model Configuration
+
+The system supports specifying different models for each stage of the marking workflow. This allows you to optimize cost and performance by using more capable models for complex tasks (like Pattern Designer) and faster models for repetitive tasks (like parallel Marker agents).
+
+**Configuration Priority** (highest to lowest):
+
+1. **Stage-specific model** - Defined in `stage_models` section of overview.md
+2. **Assignment default model** - Defined in `default_model` field of overview.md
+3. **Project config default** - Defined in `config.yaml` at project root
+
+**Available Stages**:
+
+- `pattern_designer` - Interactive agent that creates rubric and marking criteria (Stage 1)
+- `marker` - Parallel agents that evaluate student work (Stage 2, runs many times)
+- `normalizer` - Agent that aggregates and normalizes markings (Stage 3)
+- `unifier` - Parallel agents that create final student feedback (Stage 4, runs many times)
+- `aggregator` - Interactive agent that generates final CSV (Stage 5)
+
+**Example Configurations**:
+
+**Option 1: Use project defaults for all stages** (no model specified in overview.md)
+
+```yaml
+---
+default_provider: claude
+max_parallel: 4
+# No default_model specified - uses project config default
+# No stage_models specified - all stages use project config default
+---
+```
+
+**Option 2: Use assignment default for all stages**
+
+```yaml
+---
+default_provider: claude
+default_model: claude-sonnet-4
+max_parallel: 4
+# No stage_models specified - all stages use claude-sonnet-4
+---
+```
+
+**Option 3: Optimize per stage** (recommended for cost/performance balance)
+
+```yaml
+---
+default_provider: claude
+default_model: claude-sonnet-4     # Fallback for stages without overrides
+max_parallel: 4
+
+stage_models:
+  pattern_designer: claude-sonnet-4-5  # Use most capable for rubric design
+  marker: claude-sonnet-4              # Use faster model for parallel marking
+  normalizer: claude-sonnet-4-5        # Use capable model for aggregation
+  unifier: claude-sonnet-4             # Use faster model for parallel feedback
+  aggregator: claude-sonnet-4-5        # Use capable model for final CSV
+---
+```
+
+**Mixed Provider Example**:
+
+You can even use different providers for different stages:
+
+```yaml
+---
+default_provider: claude
+default_model: claude-sonnet-4
+max_parallel: 4
+
+stage_models:
+  pattern_designer: claude-sonnet-4-5  # Claude for interactive design
+  marker: gemini-2.5-flash             # Fast Gemini for parallel marking
+  normalizer: claude-sonnet-4-5        # Claude for aggregation
+  unifier: gemini-2.5-flash            # Fast Gemini for parallel feedback
+  aggregator: claude-sonnet-4-5        # Claude for final aggregation
+---
+```
+
+**Tips**:
+
+- Use more capable models (e.g., `claude-sonnet-4-5`, `gpt-5.1`) for stages requiring reasoning: pattern_designer, normalizer, aggregator
+- Use faster/cheaper models (e.g., `claude-sonnet-4`, `gemini-2.5-flash`) for parallel stages: marker, unifier
+- The `marker` and `unifier` stages run many times (once per student or per activity-student pair), so using faster models here saves significant time and cost
+- All stages are optional in `stage_models` - only specify overrides where needed
 
 ## Generating overview.md Automatically
 

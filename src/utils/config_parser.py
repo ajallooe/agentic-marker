@@ -32,7 +32,8 @@ def parse_overview(overview_path: str) -> Dict[str, Any]:
         'base_file': '',
         'assignment_type': 'structured',
         'total_marks': 100,
-        'description': ''
+        'description': '',
+        'stage_models': {}  # Per-stage model overrides
     }
 
     if not Path(overview_path).exists():
@@ -48,27 +49,50 @@ def parse_overview(overview_path: str) -> Dict[str, Any]:
         yaml_content = yaml_match.group(1)
         description = yaml_match.group(2).strip()
 
-        # Parse YAML-like content (simple key: value pairs)
+        # Parse YAML-like content (simple key: value pairs and nested stage_models)
+        in_stage_models = False
         for line in yaml_content.split('\n'):
-            line = line.strip()
-            if ':' in line and not line.startswith('#'):
-                key, value = line.split(':', 1)
+            stripped_line = line.strip()
+
+            # Skip comments and empty lines
+            if not stripped_line or stripped_line.startswith('#'):
+                continue
+
+            # Check if we're entering/exiting stage_models section
+            if stripped_line == 'stage_models:':
+                in_stage_models = True
+                continue
+
+            if ':' in stripped_line:
+                # Determine if this is an indented line (part of stage_models)
+                is_indented = line.startswith((' ', '\t'))
+
+                key, value = stripped_line.split(':', 1)
                 key = key.strip()
                 value = value.strip()
 
-                # Remove quotes if present
+                # Remove quotes and comments from value
+                if '#' in value and not (value.startswith(('"', "'"))):
+                    value = value.split('#')[0].strip()
                 if value.startswith(('"', "'")) and value.endswith(('"', "'")):
                     value = value[1:-1]
 
-                # Try to convert to appropriate type
-                if key in config:
-                    if isinstance(config[key], int):
-                        try:
-                            config[key] = int(value)
-                        except ValueError:
+                if in_stage_models and is_indented:
+                    # This is a stage model override
+                    config['stage_models'][key] = value
+                else:
+                    # This is a top-level key
+                    in_stage_models = False
+
+                    # Try to convert to appropriate type
+                    if key in config:
+                        if isinstance(config[key], int):
+                            try:
+                                config[key] = int(value)
+                            except ValueError:
+                                config[key] = value
+                        else:
                             config[key] = value
-                    else:
-                        config[key] = value
 
         config['description'] = description
 
@@ -111,7 +135,13 @@ def print_config(config: Dict[str, Any]):
     """Print configuration in a readable format."""
     print("Configuration:")
     for key, value in config.items():
-        if key != 'description':
+        if key == 'description':
+            continue
+        elif key == 'stage_models' and value:
+            print(f"  {key}:")
+            for stage, model in value.items():
+                print(f"    {stage}: {model}")
+        else:
             print(f"  {key}: {value}")
 
 
@@ -139,6 +169,14 @@ def export_bash_vars(config: Dict[str, Any]) -> str:
             bash_lines.append(f'{bash_var}="{value}"')
         else:
             bash_lines.append(f'{bash_var}={value}')
+
+    # Export per-stage model overrides
+    stage_models = config.get('stage_models', {})
+    for stage, model in stage_models.items():
+        # Convert stage name to uppercase bash variable name
+        # e.g., pattern_designer -> STAGE_MODEL_PATTERN_DESIGNER
+        bash_var = f'STAGE_MODEL_{stage.upper()}'
+        bash_lines.append(f'{bash_var}="{model}"')
 
     return '\n'.join(bash_lines)
 

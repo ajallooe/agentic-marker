@@ -75,21 +75,25 @@ Options:
   --help              Show this help message
 
 Recommended Workflow:
-  Round 1: Stop after pattern design
+  Round 1: Pattern Design
     $ $(basename "$0") assignments.txt --stop-after 2
-    → Review all pattern designs
+    → Review all rubrics and marking criteria
 
-  Round 2: Stop before dashboard review
-    $ $(basename "$0") assignments.txt --stop-after 4
-    → Review all adjustment dashboards
+  Round 2: Marker Assessment
+    $ $(basename "$0") assignments.txt --stop-after 3
+    → Review all marker qualitative evaluations
 
-  Round 3: Stop after unification
+  Round 3: Instructor Dashboard
+    $ $(basename "$0") assignments.txt --stop-after 5
+    → Review and approve all marking schemes
+
+  Round 4: Final Feedback
     $ $(basename "$0") assignments.txt --stop-after 6
-    → Optional checkpoint before final aggregation
+    → Review all student feedback cards
 
-  Round 4: Run to completion
+  Round 5: Completion
     $ $(basename "$0") assignments.txt
-    → Final grades output
+    → Generate final grades and optional utilities
 
 Assignment File Format:
   assignments/lab1
@@ -314,42 +318,98 @@ if [[ -n "$STOP_AFTER" ]]; then
     echo
     case "$STOP_AFTER" in
         2)
-            log_info "Pattern design complete for all assignments."
+            log_info "✓ Stage 2 (Pattern Design) complete for all assignments"
             echo
-            echo "Please review the following files:"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            log_warning "REVIEW REQUIRED: Marking criteria and rubrics"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo
+            echo "Please review the following files for each assignment:"
             for assignment in "${ASSIGNMENTS[@]}"; do
                 if [[ "$assignment" = /* ]]; then
                     ASSIGNMENT_DIR="$assignment"
                 else
                     ASSIGNMENT_DIR="$PROJECT_ROOT/$assignment"
                 fi
-                echo "  - $ASSIGNMENT_DIR/processed/rubric.md"
-                echo "  - $ASSIGNMENT_DIR/processed/marking_criteria.md (or activities/A*_criteria.md)"
+                echo
+                echo "📁 $assignment"
+                echo "  • Rubric: $ASSIGNMENT_DIR/processed/rubric.md"
+                if [[ -f "$ASSIGNMENT_DIR/processed/marking_criteria.md" ]]; then
+                    echo "  • Criteria: $ASSIGNMENT_DIR/processed/marking_criteria.md"
+                elif [[ -d "$ASSIGNMENT_DIR/processed/activities" ]]; then
+                    echo "  • Criteria: $ASSIGNMENT_DIR/processed/activities/A*_criteria.md"
+                fi
             done
             echo
-            log_info "When ready, continue with:"
-            echo "  $(basename "$0") $ASSIGNMENTS_FILE --stop-after 4"
+            log_info "When criteria look good, continue with Round 2:"
+            echo "  $(basename "$0") $ASSIGNMENTS_FILE --stop-after 3"
             ;;
-        4)
-            log_info "Normalization complete for all assignments."
+        3)
+            log_info "✓ Stage 3 (Marker Agents) complete for all assignments"
             echo
-            echo "Please review adjustment dashboards:"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            log_warning "REVIEW REQUIRED: Qualitative marker assessments"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo
+            echo "Spot-check marker assessments for quality:"
             for assignment in "${ASSIGNMENTS[@]}"; do
                 if [[ "$assignment" = /* ]]; then
                     ASSIGNMENT_DIR="$assignment"
                 else
                     ASSIGNMENT_DIR="$PROJECT_ROOT/$assignment"
                 fi
-                echo "  jupyter notebook $ASSIGNMENT_DIR/processed/adjustment_dashboard.ipynb"
+                echo
+                echo "📁 $assignment"
+                echo "  • Markings: $ASSIGNMENT_DIR/processed/markings/"
+                echo "    Sample a few files to verify quality and consistency"
             done
             echo
-            log_info "After approving all schemes, continue with:"
+            log_info "When assessments look reasonable, continue with Round 3:"
+            echo "  $(basename "$0") $ASSIGNMENTS_FILE --stop-after 5"
+            ;;
+        5)
+            log_info "✓ Stage 5 (Dashboard Review) complete for all assignments"
+            echo
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            log_warning "REVIEW REQUIRED: Adjustment dashboards and approve schemes"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo
+            echo "Open and approve marking schemes in Jupyter:"
+            for assignment in "${ASSIGNMENTS[@]}"; do
+                if [[ "$assignment" = /* ]]; then
+                    ASSIGNMENT_DIR="$assignment"
+                else
+                    ASSIGNMENT_DIR="$PROJECT_ROOT/$assignment"
+                fi
+                echo
+                echo "📁 $assignment"
+                echo "  jupyter notebook \"$ASSIGNMENT_DIR/processed/adjustment_dashboard.ipynb\""
+            done
+            echo
+            log_info "After approving all schemes, continue with Round 4:"
             echo "  $(basename "$0") $ASSIGNMENTS_FILE --stop-after 6"
             ;;
         6)
-            log_info "Unification complete for all assignments."
+            log_info "✓ Stage 6 (Unifier Agents) complete for all assignments"
             echo
-            log_info "Final step - run to completion:"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            log_warning "REVIEW REQUIRED: Final student feedback cards"
+            echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+            echo
+            echo "Review final feedback before distribution:"
+            for assignment in "${ASSIGNMENTS[@]}"; do
+                if [[ "$assignment" = /* ]]; then
+                    ASSIGNMENT_DIR="$assignment"
+                else
+                    ASSIGNMENT_DIR="$PROJECT_ROOT/$assignment"
+                fi
+                echo
+                echo "📁 $assignment"
+                echo "  • Feedback: $ASSIGNMENT_DIR/processed/final/"
+                echo "    Sample feedback cards to ensure quality"
+            done
+            echo
+            log_info "When feedback looks good, complete with Round 5:"
             echo "  $(basename "$0") $ASSIGNMENTS_FILE"
             ;;
     esac

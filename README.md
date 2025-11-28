@@ -849,27 +849,38 @@ assignments/project-phase1
 **Recommended Workflow:**
 
 ```bash
-# Round 1: Run all assignments through pattern design (Stage 2)
+# Round 1: Pattern Design - Review marking criteria
 ./utils/batch_mark.sh my_assignments.txt --stop-after 2
-# → Instructor reviews ALL pattern designs in one session
+# → Instructor reviews ALL rubrics and marking criteria
+# → Verify criteria are appropriate before any marking begins
 
-# Round 2: Run all assignments through normalization (Stage 4)
-./utils/batch_mark.sh my_assignments.txt --stop-after 4
-# → Instructor reviews ALL adjustment dashboards in one session
+# Round 2: Marker Assessment - Review qualitative evaluations
+./utils/batch_mark.sh my_assignments.txt --stop-after 3
+# → Instructor reviews ALL marker assessments
+# → Spot-check for quality and consistency
 
-# Round 3: Run all assignments through unification (Stage 6)
+# Round 3: Instructor Dashboard - Approve marking schemes
+./utils/batch_mark.sh my_assignments.txt --stop-after 5
+# → Instructor reviews ALL adjustment dashboards
+# → Approve final marking schemes with distribution preview
+
+# Round 4: Final Feedback - Review student feedback cards
 ./utils/batch_mark.sh my_assignments.txt --stop-after 6
-# → Optional checkpoint before final aggregation
+# → Instructor reviews ALL final feedback cards
+# → Last chance to verify before distribution
 
-# Round 4: Complete all assignments
+# Round 5: Completion - Generate final grades
 ./utils/batch_mark.sh my_assignments.txt
-# → Final grades generated for all assignments
+# → Aggregation, artifact cleaning, and optional gradebook translation
+# → grades.csv ready for upload to LMS
 ```
 
 **Benefits:**
 
-- **Minimizes context switching**: Review all pattern designs at once, all dashboards at once
+- **Quality checkpoints**: Review criteria (Stage 2), assessments (Stage 3), schemes (Stage 5), and feedback (Stage 6)
+- **Minimizes context switching**: Review similar tasks across all assignments at once
 - **Reduces idle time**: No waiting between stages for individual assignments
+- **Consistency**: Spot patterns and ensure uniform standards across assignments
 - **Automatic resume**: Uses `--resume` by default to skip completed work
 - **Auto-detection**: Automatically detects structured vs freeform assignments
 

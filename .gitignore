@@ -45,14 +45,25 @@ env/
 /GEMINI.md
 /AGENTS.md
 
-# OS
+# OS - macOS
+**/.DS_Store
 .DS_Store
-.DS_Store?
 ._*
+.AppleDouble
+.LSOverride
 .Spotlight-V100
 .Trashes
-ehthumbs.db
+
+# OS - Windows
 Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+Desktop.ini
+
+# OS - Linux
+*~
+.directory
 
 # Assignment Artifacts (processed directories)
 # Ignore all generated files in processed/ subdirectories

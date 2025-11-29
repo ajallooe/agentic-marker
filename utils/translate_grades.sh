@@ -6,13 +6,14 @@
 
 set -euo pipefail
 
-# Script directory
+# Script directory and project root
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-SRC_DIR="$SCRIPT_DIR/src"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+SRC_DIR="$PROJECT_ROOT/src"
 
 # Activate virtual environment if it exists
-if [[ -f "$SCRIPT_DIR/.venv/bin/activate" ]]; then
-    source "$SCRIPT_DIR/.venv/bin/activate"
+if [[ -f "$PROJECT_ROOT/.venv/bin/activate" ]]; then
+    source "$PROJECT_ROOT/.venv/bin/activate"
 fi
 
 # Color codes for output

@@ -14,8 +14,14 @@
 
 set -e  # Exit on error
 
-# Get the directory where this script is located
+# Get the directory where this script is located and project root
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+# Activate virtual environment if it exists
+if [[ -f "$PROJECT_ROOT/.venv/bin/activate" ]]; then
+    source "$PROJECT_ROOT/.venv/bin/activate"
+fi
 
 # Call the Python script with all arguments passed through
-python3 "$SCRIPT_DIR/src/create_overview.py" "$@"
+python3 "$PROJECT_ROOT/src/create_overview.py" "$@"

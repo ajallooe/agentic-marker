@@ -13,6 +13,35 @@ import sys
 from pathlib import Path
 
 
+def read_csv_content(csv_path: str, max_lines: int = None) -> str:
+    """Read CSV file content, optionally limiting lines."""
+    try:
+        with open(csv_path, 'r', encoding='utf-8') as f:
+            if max_lines:
+                lines = []
+                for i, line in enumerate(f):
+                    if i >= max_lines:
+                        lines.append(f"... ({i} more lines)")
+                        break
+                    lines.append(line.rstrip())
+                return '\n'.join(lines)
+            else:
+                return f.read()
+    except UnicodeDecodeError:
+        # Try with different encoding
+        with open(csv_path, 'r', encoding='latin-1') as f:
+            if max_lines:
+                lines = []
+                for i, line in enumerate(f):
+                    if i >= max_lines:
+                        lines.append(f"... (more lines)")
+                        break
+                    lines.append(line.rstrip())
+                return '\n'.join(lines)
+            else:
+                return f.read()
+
+
 def load_prompt_template(assignment_name: str, total_marks: int, assignment_type: str,
                          grades_csv_path: str, gradebook_paths: list,
                          output_path: str) -> str:
@@ -24,18 +53,23 @@ def load_prompt_template(assignment_name: str, total_marks: int, assignment_type
     with open(template_path, 'r', encoding='utf-8') as f:
         template = f.read()
 
-    # Build gradebook info
-    gradebook_info = "Section gradebook files:\n"
+    # Read grades.csv content
+    grades_csv_content = read_csv_content(grades_csv_path)
+
+    # Build gradebook info with content
+    gradebooks_content = ""
     for i, path in enumerate(gradebook_paths, 1):
-        gradebook_info += f"{i}. `{path}`\n"
+        filename = Path(path).name
+        content = read_csv_content(path)
+        gradebooks_content += f"### Gradebook {i}: `{filename}`\n\n```csv\n{content}\n```\n\n"
 
     # Fill template
     prompt = template.format(
         assignment_name=assignment_name,
         total_marks=total_marks,
         assignment_type=assignment_type,
-        grades_csv_path=grades_csv_path,
-        gradebook_info=gradebook_info,
+        grades_csv_content=grades_csv_content,
+        gradebooks_content=gradebooks_content,
         output_path=output_path
     )
 

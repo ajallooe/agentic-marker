@@ -133,13 +133,13 @@ For each positive point:
 
 For each student, list applicable mistakes and positive points:
 
-**{student_1_name}**:
+**Student 1 Name**:
 - Requirements Coverage: [Percentage or assessment]
 - Mistakes: M1, M4, M7, M12
 - Positives: P2, P5, P8
 - Overall Assessment: [Brief summary]
 
-**{student_2_name}**:
+**Student 2 Name**:
 - Requirements Coverage: [Percentage or assessment]
 - Mistakes: M3, M6
 - Positives: P1, P2, P3, P9

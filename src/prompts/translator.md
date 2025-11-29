@@ -25,17 +25,19 @@ You must use intelligent matching to find the correct student in each gradebook.
 
 ## Input Data
 
-### Grades CSV
-Path: `{grades_csv_path}`
+**IMPORTANT**: All file contents are provided below. Do NOT attempt to read files - use the data provided here.
 
-This contains the marking results with columns:
-- Student Name
-- Total Mark
-- Activity 1, Activity 2, ... (if structured)
-- Feedback Card
+### Grades CSV (Marking Results)
 
-### Gradebook CSVs
-{gradebook_info}
+This contains the marking results with columns like Student Name, Total Mark, Activity marks (if structured), and Feedback Card.
+
+```csv
+{grades_csv_content}
+```
+
+### Gradebook CSVs (Section Files)
+
+{gradebooks_content}
 
 These are section gradebook files (e.g., Moodle exports) with varying formats.
 
@@ -70,70 +72,70 @@ For each student in `grades.csv`:
 Generate a JSON mapping with this structure:
 
 ```json
-{
+{{
   "assignment_name": "Assignment Name",
   "total_marks": 100,
   "assignment_type": "structured",
   "grades_csv": "path/to/grades.csv",
   "gradebooks": [
-    {
+    {{
       "path": "path/to/section1_gradebook.csv",
       "section_name": "Section 1",
       "encoding": "utf-8",
       "student_column": "Student",
-      "columns_to_add": {
-        "Total Mark": {
+      "columns_to_add": {{
+        "Total Mark": {{
           "position": 5,
           "description": "Total mark for Assignment Name"
-        },
-        "Feedback Card": {
+        }},
+        "Feedback Card": {{
           "position": 6,
           "description": "Detailed feedback for Assignment Name"
-        },
-        "Activity 1": {
+        }},
+        "Activity 1": {{
           "position": 7,
           "description": "Mark for Activity 1"
-        }
-      },
+        }}
+      }},
       "student_mappings": [
-        {
+        {{
           "grades_name": "John Doe",
           "gradebook_name": "Doe, John",
           "confidence": 100,
           "match_method": "exact_reverse"
-        },
-        {
+        }},
+        {{
           "grades_name": "Michael Smith",
           "gradebook_name": "Mike Smith",
           "confidence": 90,
           "match_method": "nickname_match"
-        }
+        }}
       ],
       "unmatched_grades": [
-        {
+        {{
           "name": "Jane Unknown",
           "reason": "No matching student in gradebook",
           "suggested_action": "Manually add to gradebook or verify enrollment"
-        }
+        }}
       ],
       "unmatched_gradebook": [
-        {
+        {{
           "name": "Bob Missing",
           "reason": "No submission found in grades.csv",
           "suggested_action": "Student may not have submitted"
-        }
+        }}
       ]
-    }
+    }}
   ],
-  "summary": {
+  "summary": {{
     "total_students_in_grades": 32,
     "total_students_in_gradebooks": 35,
     "matched": 30,
     "unmatched_grades": 2,
     "unmatched_gradebook": 5,
     "low_confidence_matches": 3
-  }
-}
+  }}
+}}
 ```
 
 ### 4. Handle Edge Cases
@@ -249,13 +251,13 @@ Next step: Review this mapping, then run:
 
 ## Interaction Protocol
 
-1. Read grades.csv to understand the data
-2. Read all gradebook CSV files
-3. Analyze each gradebook structure
+1. Analyze the grades.csv content provided above
+2. Analyze all gradebook CSV content provided above
+3. Identify student columns and structure in each gradebook
 4. Match students using fuzzy matching strategies
 5. Build comprehensive mapping JSON
 6. Generate matching report
-7. Save mapping to file
+7. Save mapping to `{output_path}/translation_mapping.json`
 8. Display summary to instructor
 9. Signal completion: **"Mapping complete. Review and apply with apply_translation.py"**
 

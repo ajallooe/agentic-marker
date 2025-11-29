@@ -77,10 +77,34 @@ def load_prompt_template(assignment_name: str, total_marks: int, assignment_type
     return prompt
 
 
+def extract_json_from_output(output_text: str) -> str:
+    """Extract JSON from between the markers in agent output."""
+    import re
+
+    # Look for JSON between markers
+    pattern = r'===MAPPING_JSON_START===\s*(.*?)\s*===MAPPING_JSON_END==='
+    match = re.search(pattern, output_text, re.DOTALL)
+
+    if match:
+        return match.group(1).strip()
+
+    # Fallback: try to find a JSON object that looks like our mapping
+    # Look for JSON starting with {"assignment_name"
+    json_pattern = r'(\{[^{}]*"assignment_name"[^{}]*\{.*?\}\s*\})'
+    match = re.search(json_pattern, output_text, re.DOTALL)
+
+    if match:
+        return match.group(1).strip()
+
+    return None
+
+
 def run_translator(assignment_name: str, total_marks: int, assignment_type: str,
                    grades_csv_path: str, gradebook_paths: list, output_path: str,
                    provider: str, model: str = None):
     """Run the translator agent via LLM CLI."""
+    import subprocess
+    import json
 
     # Build prompt
     prompt = load_prompt_template(
@@ -88,37 +112,65 @@ def run_translator(assignment_name: str, total_marks: int, assignment_type: str,
         grades_csv_path, gradebook_paths, output_path
     )
 
-    # Prepare LLM caller command
+    # Prepare LLM caller command with session capture
     script_dir = Path(__file__).parent.parent
     llm_caller = script_dir / 'llm_caller.sh'
+    session_log = Path(output_path) / 'translator_session.log'
 
     cmd = [
         'bash',
         str(llm_caller),
         '--prompt', prompt,
         '--mode', 'interactive',
-        '--provider', provider
+        '--provider', provider,
+        '--output', str(session_log)
     ]
 
     if model:
         cmd.extend(['--model', model])
 
-    # Set working directory to output path so agent can save files
-    os.chdir(output_path)
-
-    # Run the agent
-    import subprocess
+    # Run the interactive agent session
     result = subprocess.run(cmd, check=False)
 
     if result.returncode != 0:
         print(f"\nError: Translator agent failed with exit code {result.returncode}")
         return False
 
-    # Verify output file was created
+    # Check if mapping file was directly created by agent (Claude can do this)
     mapping_file = Path(output_path) / 'translation_mapping.json'
-    if not mapping_file.exists():
-        print(f"\nError: Mapping file not created at {mapping_file}")
+    if mapping_file.exists():
+        print(f"\n✓ Translation mapping saved to: {mapping_file}")
+        return True
+
+    # Otherwise, parse the session log to extract JSON
+    if not session_log.exists():
+        print(f"\nError: Session log not found at {session_log}")
         return False
+
+    print("\nParsing session output for mapping JSON...")
+
+    with open(session_log, 'r', encoding='utf-8', errors='ignore') as f:
+        session_output = f.read()
+
+    json_content = extract_json_from_output(session_output)
+
+    if not json_content:
+        print("\nError: Could not find mapping JSON in agent output.")
+        print("The agent should output JSON between ===MAPPING_JSON_START=== and ===MAPPING_JSON_END=== markers.")
+        return False
+
+    # Validate JSON
+    try:
+        mapping_data = json.loads(json_content)
+    except json.JSONDecodeError as e:
+        print(f"\nError: Invalid JSON in agent output: {e}")
+        print("JSON content found:")
+        print(json_content[:500] + "..." if len(json_content) > 500 else json_content)
+        return False
+
+    # Save the mapping file
+    with open(mapping_file, 'w', encoding='utf-8') as f:
+        json.dump(mapping_data, f, indent=2, ensure_ascii=False)
 
     print(f"\n✓ Translation mapping saved to: {mapping_file}")
     return True

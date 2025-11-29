@@ -146,24 +146,31 @@ After resolving any issues, create this JSON structure and save it:
 }}
 ```
 
-### 5. Save and Report
+### 5. Output the Mapping
 
-1. Save the JSON to: `{output_path}/translation_mapping.json`
-2. Display a summary report showing:
-   - How many students matched
-   - Any warnings or issues
-   - Statistics
+Since you may not have file write capability, output the final JSON in this exact format so the system can save it:
+
+```
+===MAPPING_JSON_START===
+[your complete JSON here]
+===MAPPING_JSON_END===
+```
+
+Then display a summary report showing:
+- How many students matched
+- Any warnings or issues
+- Statistics
 
 ## Output Path
 
-Save mapping to: `{output_path}/translation_mapping.json`
+The system will save your JSON to: `{output_path}/translation_mapping.json`
 
 ## Interaction Flow
 
 1. **Analyze** both CSV contents provided above
 2. **Match** students using the strategies listed
 3. **If issues found** → Ask instructor for resolution (with halt option)
-4. **After resolution** → Create and save the mapping JSON
+4. **After resolution** → Output the mapping JSON between the markers above
 5. **Report** → Show summary of matches
 6. **Signal completion**: "Mapping complete. Review and apply with apply_translation.py"
 

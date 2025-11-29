@@ -67,35 +67,21 @@ For each student in grades.csv, find their corresponding entry in a gradebook:
 - 80-89%: Fuzzy match with minor differences
 - <80%: Do not auto-match, flag for instructor
 
-### 3. Handle Section Mismatches
+### 3. Handle Edge Cases
 
-**Scenario A**: Multiple submission sections, one gradebook
-- This is fine - all students should be in the single gradebook
-- Warn instructor but proceed
+**DO NOT ASK QUESTIONS** - You cannot receive responses in this session. Instead, handle all cases automatically and flag issues in the JSON for later review.
 
-**Scenario B**: One submission section, multiple gradebooks
-- This is fine - find each student in whichever gradebook they appear
-- Warn instructor but proceed
+**Section mismatches**:
+- Multiple submission sections, one gradebook → OK, proceed with warning in JSON
+- One submission section, multiple gradebooks → OK, proceed with warning in JSON
 
-**Scenario C**: Issues requiring instructor input
-- **Duplicate student**: Same student appears in multiple gradebooks → ASK instructor which one
-- **Student not found**: Student in grades.csv not in any gradebook → ASK instructor what to do
-- **Low confidence match** (<90%): → ASK instructor to confirm before including
+**For issues, include them in the JSON**:
+- **Duplicate student**: Include in first gradebook found, add to `warnings` array
+- **Student not found**: Add to `unmatched_grades` array with reason
+- **Low confidence match** (80-89%): Include the match but set `"requires_review": true`
+- **Very low confidence** (<80%): Do NOT match, add to `unmatched_grades`
 
-When issues are found, STOP and ask the instructor:
-```
-ISSUES REQUIRING YOUR INPUT:
-
-1. [Issue description]
-   Options:
-   a) [Option 1]
-   b) [Option 2]
-   c) Skip this student
-
-2. [Next issue...]
-
-Please respond with your choices (e.g., "1a, 2b, 3c") or type "halt" to stop.
-```
+The instructor will review the JSON file before applying.
 
 ### 4. Create Mapping JSON
 
@@ -109,8 +95,8 @@ After resolving any issues, create this JSON structure and save it:
   "grades_csv": "{grades_csv_path}",
   "gradebooks": [
     {{
-      "path": "[gradebook path]",
-      "section_name": "[section name]",
+      "path": "[gradebook path from Full path above]",
+      "section_name": "[extracted from filename]",
       "encoding": "utf-8",
       "student_column": "[column name containing student names]",
       "columns_to_add": {{
@@ -127,13 +113,35 @@ After resolving any issues, create this JSON structure and save it:
         {{
           "grades_name": "[name in grades.csv]",
           "gradebook_name": "[name in gradebook]",
-          "confidence": [0-100],
-          "match_method": "[exact/reverse/nickname/fuzzy]"
+          "confidence": 100,
+          "match_method": "exact",
+          "requires_review": false
+        }},
+        {{
+          "grades_name": "[another name]",
+          "gradebook_name": "[matched name]",
+          "confidence": 85,
+          "match_method": "fuzzy",
+          "requires_review": true,
+          "review_reason": "Names differ significantly"
         }}
       ],
-      "unmatched_grades": [],
-      "unmatched_gradebook": []
+      "unmatched_grades": [
+        {{
+          "name": "[student name from grades.csv]",
+          "reason": "No matching student found in gradebook"
+        }}
+      ],
+      "unmatched_gradebook": [
+        {{
+          "name": "[student name from gradebook]",
+          "reason": "No submission in grades.csv"
+        }}
+      ]
     }}
+  ],
+  "warnings": [
+    "Any warnings about section mismatches or other issues"
   ],
   "summary": {{
     "total_students_in_grades": 0,
@@ -141,7 +149,7 @@ After resolving any issues, create this JSON structure and save it:
     "matched": 0,
     "unmatched_grades": 0,
     "unmatched_gradebook": 0,
-    "low_confidence_matches": 0
+    "requires_review": 0
   }}
 }}
 ```
@@ -169,10 +177,12 @@ The system will save your JSON to: `{output_path}/translation_mapping.json`
 
 1. **Analyze** both CSV contents provided above
 2. **Match** students using the strategies listed
-3. **If issues found** → Ask instructor for resolution (with halt option)
-4. **After resolution** → Output the mapping JSON between the markers above
-5. **Report** → Show summary of matches
+3. **Flag issues** in the JSON (do NOT ask questions - just flag for review)
+4. **Output the mapping JSON** between the markers above
+5. **Report** → Show summary including any items flagged for review
 6. **Signal completion**: "Mapping complete. Review and apply with apply_translation.py"
+
+**IMPORTANT**: Output the JSON immediately after analysis. Do not wait for user input.
 
 ## Example Matching
 

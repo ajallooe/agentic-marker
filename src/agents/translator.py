@@ -56,18 +56,19 @@ def load_prompt_template(assignment_name: str, total_marks: int, assignment_type
     # Read grades.csv content
     grades_csv_content = read_csv_content(grades_csv_path)
 
-    # Build gradebook info with content
+    # Build gradebook info with content and full paths
     gradebooks_content = ""
     for i, path in enumerate(gradebook_paths, 1):
         filename = Path(path).name
         content = read_csv_content(path)
-        gradebooks_content += f"### Gradebook {i}: `{filename}`\n\n```csv\n{content}\n```\n\n"
+        gradebooks_content += f"### Gradebook {i}: `{filename}`\n\n**Full path**: `{path}`\n\n```csv\n{content}\n```\n\n"
 
     # Fill template
     prompt = template.format(
         assignment_name=assignment_name,
         total_marks=total_marks,
         assignment_type=assignment_type,
+        grades_csv_path=grades_csv_path,
         grades_csv_content=grades_csv_content,
         gradebooks_content=gradebooks_content,
         output_path=output_path

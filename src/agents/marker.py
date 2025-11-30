@@ -167,15 +167,18 @@ def main():
         required=True,
         help="Output file for marking assessment"
     )
+    default_provider = get_default_provider()
+    default_model = get_default_model()
     parser.add_argument(
         "--provider",
-        default=get_default_provider(),
-        help=f"LLM provider (default: {get_default_provider()} from config.yaml)"
+        default=default_provider,
+        required=default_provider is None,
+        help=f"LLM provider: claude, gemini, or codex (default: {default_provider or 'required'})"
     )
     parser.add_argument(
         "--model",
-        default=get_default_model(),
-        help="LLM model (default from config.yaml)"
+        default=default_model,
+        help=f"LLM model (default: {default_model or 'provider default'})"
     )
     parser.add_argument(
         "--type",
@@ -240,7 +243,7 @@ def main():
             "--prompt", prompt,
             "--mode", "headless",
             "--provider", args.provider,
-            "--output", args.output
+            "--auto-approve"  # Skip permission prompts for automated marking
         ]
 
         if args.model:
@@ -258,6 +261,10 @@ def main():
             else:
                 print(f"Error: LLM call failed: {result.stderr}", file=sys.stderr)
             sys.exit(1)
+
+        # Write output to file (Python handles file writing since shell redirection is unreliable)
+        with open(args.output, 'w', encoding='utf-8') as f:
+            f.write(result.stdout)
 
         print(f"✓ Marking complete for {args.student} ({args.activity or 'full submission'})")
         print(f"  Output: {args.output}")

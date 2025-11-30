@@ -80,15 +80,18 @@ def main():
         required=True,
         help="Path to save session transcript"
     )
+    default_provider = get_default_provider()
+    default_model = get_default_model()
     parser.add_argument(
         "--provider",
-        default=get_default_provider(),
-        help=f"LLM provider (default: {get_default_provider()} from config.yaml)"
+        default=default_provider,
+        required=default_provider is None,
+        help=f"LLM provider: claude, gemini, or codex (default: {default_provider or 'required'})"
     )
     parser.add_argument(
         "--model",
-        default=get_default_model(),
-        help="LLM model (default from config.yaml)"
+        default=default_model,
+        help=f"LLM model (default: {default_model or 'provider default'})"
     )
     parser.add_argument(
         "--type",

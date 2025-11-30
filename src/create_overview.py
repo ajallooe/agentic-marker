@@ -7,10 +7,11 @@ If not present, uses an LLM to analyze the notebook and generate overview.md.
 If present, notifies user and exits.
 
 Usage:
-    python3 create_overview.py <notebook_path> --model <model_name>
+    python3 create_overview.py <notebook_path> --provider <provider> [--model <model_name>]
 
 Example:
-    python3 create_overview.py assignments/lab1/notebook.ipynb --model claude-sonnet-4-5
+    python3 create_overview.py assignments/lab1/notebook.ipynb --provider claude
+    python3 create_overview.py assignments/lab1/notebook.ipynb --provider gemini --model gemini-2.5-pro
 """
 
 import argparse
@@ -159,7 +160,7 @@ Begin your response with the YAML front matter (the --- delimited section) and e
     return prompt
 
 
-def call_llm(prompt: str, model: str) -> str:
+def call_llm(prompt: str, provider: str, model: str = None) -> str:
     """Call the LLM via llm_caller.sh to generate the overview content."""
 
     # Get the path to llm_caller.sh
@@ -169,26 +170,17 @@ def call_llm(prompt: str, model: str) -> str:
     if not llm_caller.exists():
         raise FileNotFoundError(f"llm_caller.sh not found at {llm_caller}")
 
-    # Determine provider from model name
-    provider = None
-    if model.startswith('claude-'):
-        provider = 'claude'
-    elif model.startswith('gemini-'):
-        provider = 'gemini'
-    elif model.startswith('gpt-'):
-        provider = 'codex'
-    else:
-        # Default to claude
-        provider = 'claude'
-
     # Call llm_caller.sh in headless mode
     cmd = [
         str(llm_caller),
         "--prompt", prompt,
         "--mode", "headless",
         "--provider", provider,
-        "--model", model
+        "--auto-approve"  # Skip permission prompts for automated operation
     ]
+
+    if model:
+        cmd.extend(["--model", model])
 
     try:
         result = subprocess.run(
@@ -210,9 +202,9 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  %(prog)s assignments/lab1/notebook.ipynb --model claude-sonnet-4-5
-  %(prog)s path/to/notebook.ipynb --model gemini-2.5-pro
-  %(prog)s notebook.ipynb --model gpt-5.1
+  %(prog)s assignments/lab1/notebook.ipynb --provider claude
+  %(prog)s path/to/notebook.ipynb --provider gemini --model gemini-2.5-pro
+  %(prog)s notebook.ipynb --provider codex --model gpt-4o
         """
     )
 
@@ -223,9 +215,15 @@ Examples:
     )
 
     parser.add_argument(
-        '--model',
+        '--provider',
         required=True,
-        help='Model to use for generation (e.g., claude-sonnet-4-5, gemini-2.5-pro, gpt-5.1)'
+        choices=['claude', 'gemini', 'codex'],
+        help='LLM provider to use: claude, gemini, or codex'
+    )
+
+    parser.add_argument(
+        '--model',
+        help='Model to use (optional, uses provider default if not specified)'
     )
 
     args = parser.parse_args()
@@ -250,7 +248,9 @@ Examples:
         sys.exit(1)
 
     print(f"Analyzing notebook: {notebook_path}")
-    print(f"Using model: {args.model}")
+    print(f"Using provider: {args.provider}")
+    if args.model:
+        print(f"Using model: {args.model}")
     print()
 
     # Load and analyze the notebook
@@ -265,8 +265,9 @@ Examples:
     print(f"Detected {len(notebook.get('cells', []))} cells")
     print()
 
-    # Create prompt
-    prompt = create_prompt(notebook_path, notebook_summary, args.model)
+    # Create prompt (use model name if provided, otherwise just provider name for template)
+    model_for_template = args.model or args.provider
+    prompt = create_prompt(notebook_path, notebook_summary, model_for_template)
 
     # Call LLM to generate overview
     print("Calling LLM to generate overview.md...")
@@ -274,7 +275,7 @@ Examples:
     print()
 
     try:
-        overview_content = call_llm(prompt, args.model)
+        overview_content = call_llm(prompt, args.provider, args.model)
     except Exception as e:
         print(f"Error generating overview: {e}", file=sys.stderr)
         sys.exit(1)

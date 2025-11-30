@@ -1,14 +1,20 @@
 # System-wide Configuration for Agentic Notebook Marker
 # These are fallback defaults when not specified in assignment overview.md
+#
+# This file is read by:
+#   - Python agents via src/utils/system_config.py
+#   - Shell scripts via llm_caller.sh --config
+#
+# IMPORTANT: Model names are not hardcoded. Check each provider's documentation
+# for current available models as they may change over time.
 
 # Default LLM Provider
-# Options: claude, gemini, codex
+# Supported: claude, gemini, codex
 default_provider: claude
 
-# Default Model (optional - provider will use its default if not specified)
-# Claude models: claude-sonnet-4, claude-opus-4, claude-haiku-4
-# Gemini models: gemini-2.0-flash-exp, gemini-1.5-pro, gemini-1.5-flash
-# Codex models: gpt-4o, gpt-5.1, o1, o1-mini
+# Default Model (optional)
+# Leave empty to use each provider's built-in default model.
+# When specified, this model is used regardless of provider.
 default_model:
 
 # Parallel execution settings

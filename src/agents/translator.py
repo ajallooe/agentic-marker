@@ -81,17 +81,27 @@ def extract_json_from_output(output_text: str) -> str:
     """Extract JSON from between the markers in agent output."""
     import re
 
-    # Look for JSON between markers
+    # Look for JSON between markers - find all matches and take the one with actual JSON
     pattern = r'===MAPPING_JSON_START===\s*(.*?)\s*===MAPPING_JSON_END==='
-    match = re.search(pattern, output_text, re.DOTALL)
+    matches = re.findall(pattern, output_text, re.DOTALL)
+
+    for match in matches:
+        content = match.strip()
+        # Check if it looks like actual JSON (starts with {)
+        if content.startswith('{'):
+            return content
+
+    # Fallback: look for a large JSON object with assignment_name
+    # This pattern finds JSON objects that span multiple lines
+    json_pattern = r'(\{\s*"assignment_name"\s*:.*?"summary"\s*:\s*\{[^}]+\}\s*\})'
+    match = re.search(json_pattern, output_text, re.DOTALL)
 
     if match:
         return match.group(1).strip()
 
-    # Fallback: try to find a JSON object that looks like our mapping
-    # Look for JSON starting with {"assignment_name"
-    json_pattern = r'(\{[^{}]*"assignment_name"[^{}]*\{.*?\}\s*\})'
-    match = re.search(json_pattern, output_text, re.DOTALL)
+    # Last resort: find any JSON object starting with {"assignment_name"
+    simple_pattern = r'(\{"assignment_name".*\})\s*(?:===|$|\n\n)'
+    match = re.search(simple_pattern, output_text, re.DOTALL)
 
     if match:
         return match.group(1).strip()

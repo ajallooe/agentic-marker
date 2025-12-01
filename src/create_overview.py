@@ -153,9 +153,15 @@ IMPORTANT INSTRUCTIONS:
 
 11. **Grading Criteria**: Provide a breakdown of how marks should be distributed (e.g., 60% correctness, 20% code quality, 20% understanding)
 
-Please analyze the notebook summary above and generate ONLY the overview.md content. Do not include any additional commentary or explanation - just output the markdown content that should go into overview.md.
+CRITICAL OUTPUT INSTRUCTIONS:
+- Output ONLY the raw markdown content for overview.md
+- Do NOT write to any files yourself - just output the content
+- Do NOT include any conversational text like "Here is the overview" or "I have created..."
+- Do NOT ask follow-up questions like "What's next?"
+- Start your response IMMEDIATELY with the "---" YAML delimiter
+- End with the Notes section content (no closing remarks)
 
-Begin your response with the YAML front matter (the --- delimited section) and end with the last section of the markdown content.
+Your entire response should be valid markdown that can be directly saved as overview.md.
 """
     return prompt
 
@@ -288,6 +294,13 @@ Examples:
         overview_content = overview_content[3:].strip()
     if overview_content.endswith('```'):
         overview_content = overview_content[:-3].strip()
+
+    # Validate the content is actual overview.md content, not conversational response
+    if not overview_content.startswith('---'):
+        print(f"Error: LLM returned conversational response instead of overview content:", file=sys.stderr)
+        print(f"  Response starts with: {overview_content[:100]}...", file=sys.stderr)
+        print(f"  Expected response to start with '---' (YAML front matter)", file=sys.stderr)
+        sys.exit(1)
 
     # Save overview.md
     try:

@@ -833,6 +833,37 @@ if [[ -d "$GRADEBOOKS_DIR" ]] && compgen -G "$GRADEBOOKS_DIR/*.csv" > /dev/null;
                 log_success "Translation applied successfully"
                 log_info "  Updated gradebooks: $TRANSLATION_DIR/*.csv"
                 log_info "  Backups: $TRANSLATION_DIR/*_backup.csv"
+
+                # ============================================================================
+                # STAGE 10: Feedback Summarization (Automatic after Translation)
+                # ============================================================================
+
+                log_info "Stage 10: Summarizing feedback for gradebooks..."
+
+                # Find the filled gradebook files
+                FILLED_GRADEBOOKS=("$GRADEBOOKS_DIR"/*_filled.csv)
+                if [[ -f "${FILLED_GRADEBOOKS[0]}" ]]; then
+                    for filled_csv in "${FILLED_GRADEBOOKS[@]}"; do
+                        if [[ -f "$filled_csv" ]]; then
+                            log_info "Summarizing: $(basename "$filled_csv")"
+
+                            python3 "$SRC_DIR/utils/summarize_feedback.py" \
+                                "$filled_csv" \
+                                --provider "$DEFAULT_PROVIDER" \
+                                ${MODEL_AGGREGATOR:+--model "$MODEL_AGGREGATOR"} \
+                                --total-marks "$TOTAL_MARKS"
+
+                            if [[ $? -eq 0 ]]; then
+                                SUMMARIZED_CSV="${filled_csv%.csv}_summarized.csv"
+                                log_success "Summary created: $(basename "$SUMMARIZED_CSV")"
+                            else
+                                log_warning "Summary generation failed for $(basename "$filled_csv")"
+                            fi
+                        fi
+                    done
+                else
+                    log_warning "No filled gradebook files found to summarize"
+                fi
             fi
         fi
     fi

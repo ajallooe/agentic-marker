@@ -74,7 +74,7 @@ First Markdown Cells (for context):
     return summary
 
 
-def create_prompt(notebook_path: Path, notebook_summary: str, model: str) -> str:
+def create_prompt(notebook_path: Path, notebook_summary: str, provider: str, model: str) -> str:
     """Create the prompt for the LLM to generate overview.md."""
 
     prompt = f"""You are analyzing a Jupyter notebook assignment to create an overview.md configuration file.
@@ -88,7 +88,7 @@ Your task is to create an overview.md file with the following structure:
 
 ```markdown
 ---
-default_provider: claude
+default_provider: {provider}
 default_model: {model}
 max_parallel: 4
 base_file: <notebook_filename>
@@ -135,7 +135,7 @@ IMPORTANT INSTRUCTIONS:
 
 2. **base_file**: Use the notebook filename: {notebook_path.name}
 
-3. **default_provider**: Keep as "claude" unless you have a reason to change
+3. **default_provider**: Use "{provider}" (the provider you're currently running on)
 
 4. **default_model**: Use "{model}" (the model you're currently running on)
 
@@ -267,7 +267,7 @@ Examples:
 
     # Create prompt (use model name if provided, otherwise just provider name for template)
     model_for_template = args.model or args.provider
-    prompt = create_prompt(notebook_path, notebook_summary, model_for_template)
+    prompt = create_prompt(notebook_path, notebook_summary, args.provider, model_for_template)
 
     # Call LLM to generate overview
     print("Calling LLM to generate overview.md...")
@@ -279,6 +279,15 @@ Examples:
     except Exception as e:
         print(f"Error generating overview: {e}", file=sys.stderr)
         sys.exit(1)
+
+    # Strip markdown code block wrapper if present
+    overview_content = overview_content.strip()
+    if overview_content.startswith('```markdown'):
+        overview_content = overview_content[len('```markdown'):].strip()
+    elif overview_content.startswith('```'):
+        overview_content = overview_content[3:].strip()
+    if overview_content.endswith('```'):
+        overview_content = overview_content[:-3].strip()
 
     # Save overview.md
     try:

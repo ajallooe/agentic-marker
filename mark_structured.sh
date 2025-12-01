@@ -147,6 +147,13 @@ if [[ -n "$PROVIDER_OVERRIDE" ]]; then
 fi
 if [[ -n "$MODEL_OVERRIDE" ]]; then
     DEFAULT_MODEL="$MODEL_OVERRIDE"
+    # Clear all stage-specific model overrides when --model is provided
+    # This ensures the command-line model is used for ALL stages
+    unset STAGE_MODEL_PATTERN_DESIGNER
+    unset STAGE_MODEL_MARKER
+    unset STAGE_MODEL_NORMALIZER
+    unset STAGE_MODEL_UNIFIER
+    unset STAGE_MODEL_AGGREGATOR
 fi
 
 log_info "Configuration:"

@@ -11,7 +11,7 @@ import json
 import shutil
 from pathlib import Path
 from datetime import datetime
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 
 
 def load_grades_csv(path: str) -> Dict[str, Dict[str, Any]]:
@@ -45,6 +45,47 @@ def detect_encoding(file_path: str) -> str:
     return 'utf-8'
 
 
+def get_student_name_from_row(row: Dict[str, str], student_col: str, fieldnames: List[str]) -> str:
+    """Extract student name from a row, handling various column formats.
+
+    Handles:
+    - Single column with full name (e.g., "Student Name", "Name")
+    - Separate first/last name columns (e.g., Moodle exports)
+    - Various capitalizations
+    """
+    # Try the specified column first (for joined name formats)
+    if student_col in row and row[student_col].strip():
+        return row[student_col].strip()
+
+    # Check for common single-name columns
+    for col in ['Student Name', 'student_name', 'Name', 'name', 'Full Name', 'full_name']:
+        if col in row and row[col].strip():
+            return row[col].strip()
+
+    # Check for separate first/last name columns (Moodle-style)
+    first_name = ''
+    last_name = ''
+
+    for col in ['First name', 'First Name', 'first_name', 'FirstName', 'first name']:
+        if col in row and row[col].strip():
+            first_name = row[col].strip()
+            break
+
+    for col in ['Last name', 'Last Name', 'last_name', 'LastName', 'last name', 'Surname', 'surname']:
+        if col in row and row[col].strip():
+            last_name = row[col].strip()
+            break
+
+    if first_name and last_name:
+        return f"{first_name} {last_name}"
+    elif first_name:
+        return first_name
+    elif last_name:
+        return last_name
+
+    return ''
+
+
 def apply_gradebook_updates(gradebook_config: Dict[str, Any], grades: Dict[str, Dict[str, Any]],
                            output_dir: Path, dry_run: bool = False) -> Dict[str, Any]:
     """Apply updates to a single gradebook CSV."""
@@ -64,7 +105,7 @@ def apply_gradebook_updates(gradebook_config: Dict[str, Any], grades: Dict[str, 
     # Load gradebook
     with open(gradebook_path, 'r', encoding=encoding) as f:
         reader = csv.DictReader(f)
-        fieldnames = reader.fieldnames
+        fieldnames = list(reader.fieldnames)
         rows = list(reader)
 
     # Prepare new columns
@@ -93,7 +134,7 @@ def apply_gradebook_updates(gradebook_config: Dict[str, Any], grades: Dict[str, 
     rows_updated = []
 
     for row in rows:
-        gradebook_name = row.get(student_col, '')
+        gradebook_name = get_student_name_from_row(row, student_col, fieldnames)
 
         if gradebook_name in student_mapping:
             grades_name = student_mapping[gradebook_name]
@@ -119,19 +160,19 @@ def apply_gradebook_updates(gradebook_config: Dict[str, Any], grades: Dict[str, 
 
     # Save updated gradebook
     if not dry_run:
-        # Create backup
-        backup_path = output_dir / f"{gradebook_path.stem}_backup{gradebook_path.suffix}"
-        shutil.copy2(gradebook_path, backup_path)
-        print(f"  Backup created: {backup_path}")
-
-        # Write updated gradebook
-        output_path = output_dir / gradebook_path.name
-        with open(output_path, 'w', newline='', encoding='utf-8') as f:
+        # Write filled gradebook to same directory as original, with _filled suffix
+        filled_path = gradebook_path.parent / f"{gradebook_path.stem}_filled{gradebook_path.suffix}"
+        with open(filled_path, 'w', newline='', encoding='utf-8') as f:
             writer = csv.DictWriter(f, fieldnames=updated_fieldnames, quoting=csv.QUOTE_ALL)
             writer.writeheader()
             writer.writerows(rows_updated)
 
-        print(f"  Updated gradebook saved: {output_path}")
+        print(f"  Filled gradebook saved: {filled_path}")
+
+        # Also save a copy in the output directory for reference
+        output_copy = output_dir / gradebook_path.name
+        shutil.copy2(filled_path, output_copy)
+        print(f"  Copy saved to: {output_copy}")
     else:
         print(f"  DRY RUN: Would update {updates_applied} students")
 

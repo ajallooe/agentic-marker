@@ -20,5 +20,10 @@ default_model:
 # Parallel execution settings
 max_parallel: 4
 
+# Batch processing settings
+# Delay (in seconds) between assignments during batch runs
+# Helps avoid API rate/session issues with some providers (e.g., Gemini)
+batch_delay: 2
+
 # Logging settings
 verbose: true

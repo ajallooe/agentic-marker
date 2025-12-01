@@ -27,6 +27,16 @@ else
     PROJECT_ROOT="$SCRIPT_DIR"
 fi
 
+# Load batch_delay from config file (default: 2 seconds)
+CONFIG_FILE="$PROJECT_ROOT/configs/config.yaml"
+BATCH_DELAY=2
+if [[ -f "$CONFIG_FILE" ]]; then
+    BATCH_DELAY=$(grep -E "^batch_delay:" "$CONFIG_FILE" 2>/dev/null | sed 's/batch_delay:[[:space:]]*//' | tr -d ' ' || echo "2")
+    if [[ -z "$BATCH_DELAY" || ! "$BATCH_DELAY" =~ ^[0-9]+$ ]]; then
+        BATCH_DELAY=2
+    fi
+fi
+
 # Color output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -386,8 +396,8 @@ run_stage_for_all() {
 
         echo
 
-        # Delay between assignments to avoid Gemini API session/rate issues
-        sleep 5
+        # Delay between assignments to avoid API session/rate issues
+        sleep "$BATCH_DELAY"
     done
 
     # Report results

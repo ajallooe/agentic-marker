@@ -269,26 +269,32 @@ if [[ -z "$BASE_NOTEBOOK" ]]; then
 fi
 
 # Check if activities already extracted
-ACTIVITIES_JSON="$PROCESSED_DIR/activities.json"
-if [[ $RESUME == true && -f "$ACTIVITIES_JSON" ]]; then
-    log_info "Stage 2: Skipping (activities already extracted)"
+ACTIVITIES_DIR="$PROCESSED_DIR/activities"
+
+if [[ $RESUME == true && -d "$ACTIVITIES_DIR" ]]; then
+    # Count existing activity JSON files to get NUM_ACTIVITIES
+    NUM_ACTIVITIES=$(find "$ACTIVITIES_DIR" -name "A*.json" 2>/dev/null | wc -l | tr -d ' ')
+    if [[ "$NUM_ACTIVITIES" -gt 0 ]]; then
+        log_info "Stage 2: Skipping (activities already extracted, found $NUM_ACTIVITIES)"
+    else
+        # No JSON files but dir exists - need to re-extract
+        RESUME_STAGE2=false
+    fi
 else
-    log_info "Stage 2: Analyzing base notebook structure..."
-    log_info "Base notebook: $BASE_NOTEBOOK"
+    RESUME_STAGE2=false
 fi
 
-# Extract activity structure and count activities
-EXTRACT_OUTPUT=$(python3 "$SRC_DIR/extract_activities.py" "$BASE_NOTEBOOK" --summary 2>&1)
-echo "$EXTRACT_OUTPUT"
+# Run extraction if not resuming or if resume failed
+if [[ "${RESUME_STAGE2:-true}" == false || "$NUM_ACTIVITIES" == "0" ]]; then
+    log_info "Stage 2: Analyzing base notebook structure..."
+    log_info "Base notebook: $BASE_NOTEBOOK"
 
-# Parse activity count from output (e.g., "Successfully extracted 3 activities")
-NUM_ACTIVITIES=$(echo "$EXTRACT_OUTPUT" | grep -oE 'extracted [0-9]+ activities' | grep -oE '[0-9]+' || echo "0")
+    # Extract activity structure and count activities
+    EXTRACT_OUTPUT=$(python3 "$SRC_DIR/extract_activities.py" "$BASE_NOTEBOOK" --summary --output "$ACTIVITIES_DIR" 2>&1)
+    echo "$EXTRACT_OUTPUT"
 
-if [[ "$NUM_ACTIVITIES" == "0" ]]; then
-    # Fallback: count A* patterns in activities dir if it exists
-    if [[ -d "$ACTIVITIES_DIR" ]]; then
-        NUM_ACTIVITIES=$(find "$ACTIVITIES_DIR" -name "A*_criteria.md" 2>/dev/null | wc -l | tr -d ' ')
-    fi
+    # Parse activity count from output (e.g., "Successfully extracted 3 activities")
+    NUM_ACTIVITIES=$(echo "$EXTRACT_OUTPUT" | grep -oE 'extracted [0-9]+ activities' | grep -oE '[0-9]+' || echo "0")
 fi
 
 if [[ "$NUM_ACTIVITIES" == "0" ]]; then

@@ -385,6 +385,9 @@ run_stage_for_all() {
         fi
 
         echo
+
+        # Small delay between assignments to avoid Gemini session issues
+        sleep 2
     done
 
     # Report results

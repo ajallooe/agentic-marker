@@ -2,15 +2,29 @@
 #
 # Load API keys from .secrets/ directory into environment variables
 #
-# Usage: source utils/load_api_keys.sh
+# Usage (from project root): source utils/load_api_keys.sh
 #
 # NOTE: This file must be SOURCED, not executed, for the exports to persist:
 #   source utils/load_api_keys.sh   # correct
 #   ./utils/load_api_keys.sh        # wrong - exports won't persist
 #
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
+# Find project root by looking for .secrets/ directory
+# First try current directory, then parent of script location
+if [[ -d ".secrets" ]]; then
+    PROJECT_ROOT="$(pwd)"
+elif [[ -d "$(dirname "$0")/../.secrets" ]]; then
+    PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+else
+    # Last resort: check common locations
+    for dir in "." ".." "../.."; do
+        if [[ -d "$dir/.secrets" ]]; then
+            PROJECT_ROOT="$(cd "$dir" && pwd)"
+            break
+        fi
+    done
+fi
+
 SECRETS_DIR="$PROJECT_ROOT/.secrets"
 
 if [[ ! -d "$SECRETS_DIR" ]]; then

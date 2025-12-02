@@ -13,9 +13,35 @@ import sys
 import tempfile
 from pathlib import Path
 
+import yaml
+
 # Project root for finding llm_caller.sh
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 LLM_CALLER = PROJECT_ROOT / "src" / "llm_caller.sh"
+MODELS_CONFIG = PROJECT_ROOT / "configs" / "models.yaml"
+
+
+def resolve_provider_from_model(model_name: str) -> str | None:
+    """Resolve provider from model name using configs/models.yaml."""
+    if MODELS_CONFIG.exists():
+        try:
+            with open(MODELS_CONFIG, 'r') as f:
+                config = yaml.safe_load(f)
+            models = config.get('models', {})
+            if model_name in models:
+                return models[model_name]
+        except Exception:
+            pass  # Fall back to prefix matching
+
+    # Fallback: infer from model name prefix
+    if model_name.startswith('claude'):
+        return 'claude'
+    elif model_name.startswith('gemini'):
+        return 'gemini'
+    elif model_name.startswith('gpt-') or model_name.startswith('o1') or model_name.startswith('o3'):
+        return 'codex'
+
+    return None
 
 
 MODIFY_PROMPT = """You are a precise feedback editor. Your task is to apply ONE specific modification to the feedback below.
@@ -173,12 +199,11 @@ def main():
     )
     parser.add_argument(
         '--provider',
-        default='claude',
-        help='LLM provider (claude, gemini, codex). Default: claude'
+        help='LLM provider (claude, gemini, codex). Auto-resolved from --model if not specified.'
     )
     parser.add_argument(
         '--model',
-        help='Specific model to use (optional)'
+        help='Model to use (provider auto-resolved from model name)'
     )
     parser.add_argument(
         '--feedback-col',
@@ -196,6 +221,21 @@ def main():
     )
 
     args = parser.parse_args()
+
+    # Resolve provider from model if not specified
+    provider = args.provider
+    model = args.model
+
+    if not provider and model:
+        provider = resolve_provider_from_model(model)
+        if not provider:
+            print(f"Error: Could not determine provider for model '{model}'", file=sys.stderr)
+            print("Either add it to configs/models.yaml or specify --provider explicitly", file=sys.stderr)
+            sys.exit(1)
+
+    # Default to claude if neither specified
+    if not provider:
+        provider = 'claude'
 
     csv_path = Path(args.csv_file)
     if not csv_path.exists():
@@ -255,8 +295,8 @@ def main():
             total_mark=total_mark,
             feedback=original_feedback,
             instruction=args.instruction,
-            provider=args.provider,
-            model=args.model
+            provider=provider,
+            model=model
         )
 
         if modified_feedback != original_feedback:

@@ -66,10 +66,45 @@ log_round() {
     echo -e "${CYAN}${BOLD}$1${NC}"
 }
 
+# Models config for provider resolution
+MODELS_CONFIG="$PROJECT_ROOT/configs/models.yaml"
+
+# Resolve provider from model name
+resolve_provider_from_model() {
+    local model_name="$1"
+
+    # First, try to look up in models.yaml
+    if [[ -f "$MODELS_CONFIG" ]]; then
+        local provider
+        provider=$(grep -E "^[[:space:]]*${model_name}:" "$MODELS_CONFIG" 2>/dev/null | \
+                   sed 's/.*:[[:space:]]*//' | tr -d '"' | tr -d "'" || true)
+        if [[ -n "$provider" ]]; then
+            echo "$provider"
+            return 0
+        fi
+    fi
+
+    # Fallback: infer provider from model name prefix
+    case "$model_name" in
+        claude-*|claude[0-9]*)
+            echo "claude"
+            ;;
+        gemini-*|gemini[0-9]*)
+            echo "gemini"
+            ;;
+        gpt-*|o1*|o3*)
+            echo "codex"
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
 # Usage message
 usage() {
     cat << EOF
-Usage: $(basename "$0") ASSIGNMENTS_FILE --provider PROVIDER --model MODEL [OPTIONS]
+Usage: $(basename "$0") ASSIGNMENTS_FILE [--model MODEL | --provider PROVIDER] [OPTIONS]
 
 Batch process multiple assignments in staged rounds to optimize instructor workflow.
 The script automatically runs all stages in the correct order, pausing for review
@@ -78,9 +113,11 @@ after interactive stages.
 Arguments:
   ASSIGNMENTS_FILE    Text file with assignment paths (one per line)
 
-Required:
-  --provider NAME     LLM provider (claude, gemini, or codex)
+Model/Provider (at least one required):
   --model NAME        Model name (e.g., claude-sonnet-4, gemini-2.5-pro, gpt-4o)
+                      Provider is auto-resolved from model name
+  --provider NAME     LLM provider (claude, gemini, or codex)
+                      Only needed if model is not specified or unrecognized
 
 Options:
   --parallel N        Override max parallel tasks for all assignments
@@ -191,14 +228,25 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Validate required arguments
-if [[ -z "$PROVIDER" ]]; then
-    log_error "--provider is required"
+# Resolve provider from model if not explicitly set
+if [[ -z "$PROVIDER" && -n "$MODEL" ]]; then
+    PROVIDER=$(resolve_provider_from_model "$MODEL")
+    if [[ -z "$PROVIDER" ]]; then
+        log_error "Could not determine provider for model '$MODEL'"
+        log_error "Either add it to configs/models.yaml or specify --provider explicitly"
+        exit 1
+    fi
+fi
+
+# Validate we have at least provider or model
+if [[ -z "$PROVIDER" && -z "$MODEL" ]]; then
+    log_error "--model or --provider is required"
     usage
 fi
 
-if [[ -z "$MODEL" ]]; then
-    log_error "--model is required"
+# If we only have provider (no model), that's fine - CLI will use its default
+if [[ -z "$PROVIDER" ]]; then
+    log_error "Could not determine provider"
     usage
 fi
 
@@ -244,7 +292,11 @@ echo "=================================================================="
 echo
 log_info "Found ${#ASSIGNMENTS[@]} assignment(s) to process"
 log_info "Provider: $PROVIDER"
-log_info "Model: $MODEL"
+if [[ -n "$MODEL" ]]; then
+    log_info "Model: $MODEL"
+else
+    log_info "Model: (provider default)"
+fi
 if [[ "$START_ROUND" -gt 1 ]]; then
     log_info "Starting from round: $START_ROUND"
 fi

@@ -12,6 +12,36 @@ import os
 import sys
 from pathlib import Path
 
+import yaml
+
+
+def resolve_provider_from_model(model_name: str) -> str | None:
+    """Resolve provider from model name using configs/models.yaml."""
+    # Find the project root (where configs/ lives)
+    script_dir = Path(__file__).parent
+    project_root = script_dir.parent.parent
+    models_config = project_root / 'configs' / 'models.yaml'
+
+    if models_config.exists():
+        try:
+            with open(models_config, 'r') as f:
+                config = yaml.safe_load(f)
+            models = config.get('models', {})
+            if model_name in models:
+                return models[model_name]
+        except Exception:
+            pass  # Fall back to prefix matching
+
+    # Fallback: infer from model name prefix
+    if model_name.startswith('claude'):
+        return 'claude'
+    elif model_name.startswith('gemini'):
+        return 'gemini'
+    elif model_name.startswith('gpt-') or model_name.startswith('o1') or model_name.startswith('o3'):
+        return 'codex'
+
+    return None
+
 
 def read_csv_content(csv_path: str, max_lines: int = None) -> str:
     """Read CSV file content, optionally limiting lines."""
@@ -317,11 +347,31 @@ def main():
                        help='Paths to gradebook CSVs')
     parser.add_argument('--output-path', required=True,
                        help='Directory to save mapping file')
-    parser.add_argument('--provider', required=True,
-                       choices=['claude', 'gemini', 'codex'], help='LLM provider')
-    parser.add_argument('--model', help='Specific model to use')
+    parser.add_argument('--provider',
+                       choices=['claude', 'gemini', 'codex'],
+                       help='LLM provider (optional if --model is specified)')
+    parser.add_argument('--model', help='Model to use (provider auto-resolved)')
 
     args = parser.parse_args()
+
+    # Resolve provider from model if not specified
+    provider = args.provider
+    model = args.model
+
+    if not provider and model:
+        provider = resolve_provider_from_model(model)
+        if not provider:
+            print(f"Error: Could not determine provider for model '{model}'")
+            print("Either add it to configs/models.yaml or specify --provider explicitly")
+            return 1
+
+    if not provider and not model:
+        print("Error: --model or --provider is required")
+        return 1
+
+    if not provider:
+        print("Error: Could not determine provider")
+        return 1
 
     # Validate inputs
     grades_csv = Path(args.grades_csv)
@@ -345,8 +395,8 @@ def main():
         str(grades_csv.absolute()),
         [str(Path(g).absolute()) for g in args.gradebooks],
         str(output_path.absolute()),
-        args.provider,
-        args.model
+        provider,
+        model
     )
 
     return 0 if success else 1

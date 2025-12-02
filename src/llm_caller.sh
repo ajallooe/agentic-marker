@@ -10,13 +10,19 @@
 # comes from command-line arguments or an optional config file.
 #
 # Usage:
+#   llm_caller.sh --model <model_name> --prompt "text" [OPTIONS]
 #   llm_caller.sh --provider <claude|gemini|codex> --prompt "text" [OPTIONS]
-#   llm_caller.sh --provider <claude|gemini|codex> --prompt-file <file> [OPTIONS]
 #   llm_caller.sh --config <config.yaml> --prompt "text" [OPTIONS]
 #
-# Required (one of):
-#   --provider <name>       LLM provider: claude, gemini, or codex
-#   --config <file>         YAML config file with provider/model defaults
+# Provider Resolution (in order of precedence):
+#   1. --provider explicitly specified
+#   2. --model specified → provider auto-resolved from configs/models.yaml
+#   3. --config file with default_provider
+#
+# Model Resolution:
+#   1. --model explicitly specified
+#   2. Default model from configs/models.yaml for the resolved provider
+#   3. No model passed to CLI (uses CLI's built-in default)
 #
 # Prompt (one required):
 #   --prompt <text>         Prompt text
@@ -60,12 +66,80 @@ AUTO_APPROVE=false
 WRITE_DIRS=""
 CONFIG_FILE=""
 
+# Script directory for finding models.yaml
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+MODELS_CONFIG="$PROJECT_ROOT/configs/models.yaml"
+
 # ============================================================================
 # Help
 # ============================================================================
 show_help() {
     sed -n '2,/^$/p' "$0" | sed 's/^# \?//'
     exit 0
+}
+
+# ============================================================================
+# Resolve provider from model name using models.yaml
+# ============================================================================
+resolve_provider_from_model() {
+    local model_name="$1"
+
+    # First, try to look up in models.yaml
+    if [[ -f "$MODELS_CONFIG" ]]; then
+        # Look for exact match in models section
+        local provider
+        provider=$(grep -E "^[[:space:]]*${model_name}:" "$MODELS_CONFIG" 2>/dev/null | \
+                   sed 's/.*:[[:space:]]*//' | tr -d '"' | tr -d "'" || true)
+        if [[ -n "$provider" ]]; then
+            echo "$provider"
+            return 0
+        fi
+    fi
+
+    # Fallback: infer provider from model name prefix
+    case "$model_name" in
+        claude-*|claude[0-9]*)
+            echo "claude"
+            ;;
+        gemini-*|gemini[0-9]*)
+            echo "gemini"
+            ;;
+        gpt-*|o1*|o3*)
+            echo "codex"
+            ;;
+        *)
+            # Unknown model prefix
+            return 1
+            ;;
+    esac
+}
+
+# ============================================================================
+# Get default model for a provider from models.yaml
+# ============================================================================
+get_default_model_for_provider() {
+    local provider="$1"
+
+    if [[ -f "$MODELS_CONFIG" ]]; then
+        # Look in defaults section
+        local in_defaults=false
+        while IFS= read -r line; do
+            if [[ "$line" =~ ^defaults: ]]; then
+                in_defaults=true
+            elif [[ "$in_defaults" == true && "$line" =~ ^[[:space:]]+${provider}: ]]; then
+                local model
+                model=$(echo "$line" | sed "s/.*${provider}:[[:space:]]*//" | tr -d '"' | tr -d "'")
+                if [[ -n "$model" ]]; then
+                    echo "$model"
+                fi
+                return 0
+            elif [[ "$in_defaults" == true && "$line" =~ ^[a-z]+: ]]; then
+                # New top-level section, stop looking
+                break
+            fi
+        done < "$MODELS_CONFIG"
+    fi
 }
 
 # ============================================================================
@@ -189,8 +263,26 @@ if [[ -z "$PROMPT" ]]; then
     exit 1
 fi
 
+# ============================================================================
+# Resolve provider from model if not explicitly set
+# ============================================================================
+if [[ -z "$PROVIDER" && -n "$MODEL" ]]; then
+    PROVIDER=$(resolve_provider_from_model "$MODEL")
+    if [[ -z "$PROVIDER" ]]; then
+        echo "Error: Could not determine provider for model '$MODEL'" >&2
+        echo "Either add it to configs/models.yaml or specify --provider explicitly" >&2
+        exit 1
+    fi
+fi
+
+# If we have a provider but no model, try to get the default model
+if [[ -n "$PROVIDER" && -z "$MODEL" ]]; then
+    MODEL=$(get_default_model_for_provider "$PROVIDER")
+    # MODEL can be empty - that's fine, CLI will use its default
+fi
+
 if [[ -z "$PROVIDER" ]]; then
-    echo "Error: --provider is required (or use --config with default_provider)" >&2
+    echo "Error: --provider or --model is required (or use --config with default_provider)" >&2
     exit 1
 fi
 

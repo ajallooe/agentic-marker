@@ -146,9 +146,59 @@ fi
 
 eval "$("$SRC_DIR/utils/config_parser.py" "$OVERVIEW_FILE" --bash)"
 
+# Models config for provider resolution
+MODELS_CONFIG="$PROJECT_ROOT/configs/models.yaml"
+
+# Resolve provider from model name
+resolve_provider_from_model() {
+    local model_name="$1"
+
+    # First, try to look up in models.yaml
+    if [[ -f "$MODELS_CONFIG" ]]; then
+        local provider
+        provider=$(grep -E "^[[:space:]]*${model_name}:" "$MODELS_CONFIG" 2>/dev/null | \
+                   sed 's/.*:[[:space:]]*//' | tr -d '"' | tr -d "'" || true)
+        if [[ -n "$provider" ]]; then
+            echo "$provider"
+            return 0
+        fi
+    fi
+
+    # Fallback: infer provider from model name prefix
+    case "$model_name" in
+        claude-*|claude[0-9]*)
+            echo "claude"
+            ;;
+        gemini-*|gemini[0-9]*)
+            echo "gemini"
+            ;;
+        gpt-*|o1*|o3*)
+            echo "codex"
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
 # Set provider and model defaults
 PROVIDER="${PROVIDER:-$DEFAULT_PROVIDER}"
 MODEL="${MODEL:-${DEFAULT_MODEL:-}}"
+
+# Resolve provider from model if not set
+if [[ -z "$PROVIDER" && -n "$MODEL" ]]; then
+    PROVIDER=$(resolve_provider_from_model "$MODEL")
+    if [[ -z "$PROVIDER" ]]; then
+        log_error "Could not determine provider for model '$MODEL'"
+        log_error "Either add it to configs/models.yaml or specify --provider explicitly"
+        exit 1
+    fi
+fi
+
+if [[ -z "$PROVIDER" && -z "$MODEL" ]]; then
+    log_error "--model or --provider is required (or set default_provider in overview.md)"
+    exit 1
+fi
 
 log_info "Starting gradebook translation: $ASSIGNMENT_NAME"
 log_info "Assignment directory: $ASSIGNMENT_DIR"
@@ -191,7 +241,7 @@ else
         --grades-csv "$GRADES_CSV" \
         "${GRADEBOOK_ARGS[@]}" \
         --output-path "$TRANSLATION_DIR" \
-        --provider "$PROVIDER" \
+        ${PROVIDER:+--provider "$PROVIDER"} \
         ${MODEL:+--model "$MODEL"}
 
     if [[ $? -ne 0 ]]; then

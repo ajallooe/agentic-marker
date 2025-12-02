@@ -7,18 +7,23 @@ If not present, uses an LLM to analyze the notebook and generate overview.md.
 If present, notifies user and exits.
 
 Usage:
-    python3 create_overview.py <notebook_path> --provider <provider> [--model <model_name>]
+    python3 create_overview.py <notebook_path> --model <model_name>
+    python3 create_overview.py <notebook_path> --provider <provider>
 
 Example:
+    python3 create_overview.py assignments/lab1/notebook.ipynb --model claude-sonnet-4
+    python3 create_overview.py assignments/lab1/notebook.ipynb --model gemini-2.5-pro
     python3 create_overview.py assignments/lab1/notebook.ipynb --provider claude
-    python3 create_overview.py assignments/lab1/notebook.ipynb --provider gemini --model gemini-2.5-pro
 """
 
 import argparse
 import json
+import re
 import subprocess
 import sys
 from pathlib import Path
+
+import yaml
 
 
 def load_notebook(notebook_path: Path) -> dict:
@@ -202,15 +207,43 @@ def call_llm(prompt: str, provider: str, model: str = None) -> str:
         sys.exit(1)
 
 
+def resolve_provider_from_model(model_name: str) -> str | None:
+    """Resolve provider from model name using configs/models.yaml."""
+    # Find the project root (where configs/ lives)
+    script_dir = Path(__file__).parent
+    project_root = script_dir.parent
+    models_config = project_root / 'configs' / 'models.yaml'
+
+    if models_config.exists():
+        try:
+            with open(models_config, 'r') as f:
+                config = yaml.safe_load(f)
+            models = config.get('models', {})
+            if model_name in models:
+                return models[model_name]
+        except Exception:
+            pass  # Fall back to prefix matching
+
+    # Fallback: infer from model name prefix
+    if model_name.startswith('claude'):
+        return 'claude'
+    elif model_name.startswith('gemini'):
+        return 'gemini'
+    elif model_name.startswith('gpt-') or model_name.startswith('o1') or model_name.startswith('o3'):
+        return 'codex'
+
+    return None
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Generate overview.md from a Jupyter notebook",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  %(prog)s assignments/lab1/notebook.ipynb --provider claude
-  %(prog)s path/to/notebook.ipynb --provider gemini --model gemini-2.5-pro
-  %(prog)s notebook.ipynb --provider codex --model gpt-4o
+  %(prog)s assignments/lab1/notebook.ipynb --model claude-sonnet-4
+  %(prog)s path/to/notebook.ipynb --model gemini-2.5-pro
+  %(prog)s notebook.ipynb --provider claude
         """
     )
 
@@ -221,18 +254,36 @@ Examples:
     )
 
     parser.add_argument(
-        '--provider',
-        required=True,
-        choices=['claude', 'gemini', 'codex'],
-        help='LLM provider to use: claude, gemini, or codex'
+        '--model',
+        help='Model to use (provider auto-resolved from model name)'
     )
 
     parser.add_argument(
-        '--model',
-        help='Model to use (optional, uses provider default if not specified)'
+        '--provider',
+        choices=['claude', 'gemini', 'codex'],
+        help='LLM provider (optional if --model is specified)'
     )
 
     args = parser.parse_args()
+
+    # Resolve provider from model if not specified
+    provider = args.provider
+    model = args.model
+
+    if not provider and model:
+        provider = resolve_provider_from_model(model)
+        if not provider:
+            print(f"Error: Could not determine provider for model '{model}'", file=sys.stderr)
+            print("Either add it to configs/models.yaml or specify --provider explicitly", file=sys.stderr)
+            sys.exit(1)
+
+    if not provider and not model:
+        print("Error: --model or --provider is required", file=sys.stderr)
+        sys.exit(1)
+
+    if not provider:
+        print("Error: Could not determine provider", file=sys.stderr)
+        sys.exit(1)
 
     # Validate notebook path
     notebook_path = args.notebook.resolve()
@@ -254,9 +305,9 @@ Examples:
         sys.exit(1)
 
     print(f"Analyzing notebook: {notebook_path}")
-    print(f"Using provider: {args.provider}")
-    if args.model:
-        print(f"Using model: {args.model}")
+    print(f"Using provider: {provider}")
+    if model:
+        print(f"Using model: {model}")
     print()
 
     # Load and analyze the notebook
@@ -272,8 +323,8 @@ Examples:
     print()
 
     # Create prompt (use model name if provided, otherwise just provider name for template)
-    model_for_template = args.model or args.provider
-    prompt = create_prompt(notebook_path, notebook_summary, args.provider, model_for_template)
+    model_for_template = model or provider
+    prompt = create_prompt(notebook_path, notebook_summary, provider, model_for_template)
 
     # Call LLM to generate overview
     print("Calling LLM to generate overview.md...")
@@ -281,7 +332,7 @@ Examples:
     print()
 
     try:
-        overview_content = call_llm(prompt, args.provider, args.model)
+        overview_content = call_llm(prompt, provider, model)
     except Exception as e:
         print(f"Error generating overview: {e}", file=sys.stderr)
         sys.exit(1)

@@ -1,0 +1,45 @@
+# Model Configuration for Agentic Notebook Marker
+#
+# This file maps model names to their providers and defines default models.
+# Used by llm_caller.sh and other scripts to auto-resolve providers.
+#
+# Structure:
+#   defaults:
+#     <provider>: <model>   # Default model for each provider (optional)
+#
+#   models:
+#     <model_name>: <provider>   # Model-to-provider mapping
+#
+# When a model is specified:
+#   1. Look up the provider from the models section
+#   2. If not found, try to infer from model name prefix
+#
+# When no model is specified:
+#   1. Use the default model for the provider (if set)
+#   2. If no default, call the CLI without --model (uses CLI's built-in default)
+
+# Default models for each provider (optional)
+# Leave blank or omit to use the CLI tool's built-in default
+defaults:
+  claude:           # e.g., claude-sonnet-4
+  gemini:           # e.g., gemini-2.5-pro
+  codex:            # e.g., gpt-5.1
+
+# Model name to provider mappings
+# Add new models here as they become available
+models:
+  # Claude models
+  claude-opus-4-5: claude
+  claude-sonnet-4-5: claude
+  claude-haiku-4-5: claude
+
+  # Gemini models
+  gemini-3-pro-preview: gemini
+  gemini-2.5-pro: gemini
+  gemini-2.5-flash: gemini
+  gemini-2.5-flash-lite: gemini
+  
+  # OpenAI/Codex models
+  gpt-5.1-codex-max: codex
+  gpt-5.1-codex-mini: codex
+  gpt-5.1: codex

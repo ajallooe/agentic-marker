@@ -14,7 +14,7 @@ from pathlib import Path
 # Import utilities
 sys.path.insert(0, str(Path(__file__).parent.parent / "utils"))
 from quota_detector import is_quota_error, print_quota_warning
-from system_config import get_default_provider, get_default_model
+from system_config import get_default_provider, get_default_model, resolve_provider_from_model
 
 
 def load_prompt_template(assignment_type: str) -> str:
@@ -275,10 +275,27 @@ def main():
         if result.returncode != 0:
             # Check if this is a quota/rate limit error
             error_output = result.stderr + result.stdout
-            quota_detected = is_quota_error(error_output, args.provider)
+
+            # Determine the actual provider used for error reporting
+            # When --api-model is set, resolve provider from the model name
+            effective_provider = args.provider
+            if args.api_model:
+                resolved = resolve_provider_from_model(args.api_model)
+                if resolved:
+                    # Normalize provider name for quota detection
+                    if resolved in ('codex', 'openai'):
+                        effective_provider = 'codex'
+                    elif resolved in ('claude', 'anthropic'):
+                        effective_provider = 'claude'
+                    elif resolved in ('gemini', 'google'):
+                        effective_provider = 'gemini'
+                    else:
+                        effective_provider = resolved
+
+            quota_detected = is_quota_error(error_output, effective_provider)
 
             if quota_detected:
-                print_quota_warning(args.provider, error_output)
+                print_quota_warning(effective_provider, error_output)
             else:
                 print(f"Error: LLM call failed: {result.stderr}", file=sys.stderr)
             sys.exit(1)

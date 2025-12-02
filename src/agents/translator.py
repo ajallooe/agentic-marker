@@ -233,8 +233,8 @@ def extract_json_from_output(output_text: str) -> str:
 
 def run_translator(assignment_name: str, total_marks: int, assignment_type: str,
                    grades_csv_path: str, gradebook_paths: list, output_path: str,
-                   provider: str, model: str = None):
-    """Run the translator agent via LLM CLI."""
+                   provider: str, model: str = None, api_model: str = None):
+    """Run the translator agent via LLM CLI or API."""
     import subprocess
     import json
 
@@ -244,11 +244,75 @@ def run_translator(assignment_name: str, total_marks: int, assignment_type: str,
         grades_csv_path, gradebook_paths, output_path
     )
 
-    # Prepare LLM caller command with session capture
+    # Prepare LLM caller command
     script_dir = Path(__file__).parent.parent
     llm_caller = script_dir / 'llm_caller.sh'
     session_log = Path(output_path) / 'translator_session.log'
 
+    # Use API mode if api_model is specified
+    if api_model:
+        cmd = [
+            'bash',
+            str(llm_caller),
+            '--prompt', prompt,
+            '--mode', 'headless',
+            '--api-model', api_model,
+            '--provider', provider  # Fallback provider
+        ]
+        if model:
+            cmd.extend(['--model', model])
+
+        # Run headless API call
+        result = subprocess.run(cmd, capture_output=True, text=True)
+
+        if result.returncode != 0:
+            print(f"\nError: Translator API call failed: {result.stderr}")
+            return False
+
+        # Parse JSON from API response
+        api_output = result.stdout.strip()
+
+        # Save session log for debugging
+        with open(session_log, 'w', encoding='utf-8') as f:
+            f.write(api_output)
+
+        # Extract JSON from the response
+        json_content = extract_json_from_output(api_output)
+
+        if not json_content:
+            # Try to find JSON directly in the output
+            if '===MAPPING_JSON_START===' not in api_output:
+                # Try to parse the entire output as JSON
+                try:
+                    mapping_data = json.loads(api_output)
+                    mapping_file = Path(output_path) / 'translation_mapping.json'
+                    with open(mapping_file, 'w', encoding='utf-8') as f:
+                        json.dump(mapping_data, f, indent=2, ensure_ascii=False)
+                    print(f"\n✓ Translation mapping saved to: {mapping_file}")
+                    return True
+                except json.JSONDecodeError:
+                    pass
+
+            print("\nError: Could not find mapping JSON in API output.")
+            print("Response preview:")
+            print(api_output[:1000] if len(api_output) > 1000 else api_output)
+            return False
+
+        # Validate and save JSON
+        try:
+            mapping_data = json.loads(json_content)
+        except json.JSONDecodeError as e:
+            print(f"\nError: Invalid JSON in API output: {e}")
+            return False
+
+        mapping_file = Path(output_path) / 'translation_mapping.json'
+        with open(mapping_file, 'w', encoding='utf-8') as f:
+            json.dump(mapping_data, f, indent=2, ensure_ascii=False)
+
+        print(f"\n✓ Translation mapping saved to: {mapping_file}")
+        return True
+
+    # Interactive mode (original behavior)
     cmd = [
         'bash',
         str(llm_caller),
@@ -325,7 +389,7 @@ def main():
                        choices=['claude', 'gemini', 'codex'],
                        help='LLM provider (optional if --model is specified)')
     parser.add_argument('--model', help='Model to use (provider auto-resolved)')
-    parser.add_argument('--api-model', help='Model for direct API calls (currently unused - translator is interactive)')
+    parser.add_argument('--api-model', help='Model for direct API calls (uses headless API mode instead of interactive CLI)')
 
     args = parser.parse_args()
 
@@ -372,7 +436,8 @@ def main():
         [str(Path(g).absolute()) for g in args.gradebooks],
         str(output_path.absolute()),
         provider,
-        model
+        model,
+        args.api_model
     )
 
     return 0 if success else 1

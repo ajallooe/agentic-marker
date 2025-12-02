@@ -10,6 +10,9 @@
 #   models:
 #     <model_name>: <provider>   # Model-to-provider mapping
 #
+#   expensive:
+#     - <model_name>   # Models requiring user confirmation (high cost)
+#
 # When a model is specified:
 #   1. Look up the provider from the models section
 #   2. If not found, try to infer from model name prefix
@@ -17,29 +20,44 @@
 # When no model is specified:
 #   1. Use the default model for the provider (if set)
 #   2. If no default, call the CLI without --model (uses CLI's built-in default)
+#
+# Expensive models:
+#   - Cannot be used as project or assignment defaults
+#   - Require explicit CLI argument to invoke
+#   - Prompt for user confirmation before use
 
 # Default models for each provider (optional)
 # Leave blank or omit to use the CLI tool's built-in default
 defaults:
-  claude:           # e.g., claude-sonnet-4
+  claude:           # e.g., claude-sonnet-4-5
   gemini:           # e.g., gemini-2.5-pro
   codex:            # e.g., gpt-5.1
 
 # Model name to provider mappings
 # Add new models here as they become available
 models:
-  # Claude models
+  # Claude models (Anthropic)
   claude-opus-4-5: claude
   claude-sonnet-4-5: claude
   claude-haiku-4-5: claude
 
-  # Gemini models
+  # Gemini models (Google)
   gemini-3-pro-preview: gemini
   gemini-2.5-pro: gemini
   gemini-2.5-flash: gemini
   gemini-2.5-flash-lite: gemini
-  
+
   # OpenAI/Codex models
-  gpt-5.1-codex-max: codex
-  gpt-5.1-codex-mini: codex
   gpt-5.1: codex
+  gpt-5-mini: codex
+  gpt-5-nano: codex
+  gpt-5-pro: codex
+
+# Expensive models requiring user confirmation
+# These models have significantly higher costs and:
+#   - Cannot be set as default_model in config.yaml or overview.md
+#   - Require explicit --model or --api-model CLI argument
+#   - Will prompt for confirmation before use (unless --yes flag)
+expensive:
+  - claude-opus-4-5
+  - gpt-5-pro

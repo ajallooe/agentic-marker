@@ -185,6 +185,61 @@ def resolve_provider_from_model(model_name: str) -> str | None:
     return None
 
 
+def get_expensive_models() -> list:
+    """
+    Get the list of expensive models from models.yaml.
+
+    Returns:
+        list: List of model names that are marked as expensive.
+    """
+    config = load_models_config()
+    return config.get('expensive', [])
+
+
+def is_expensive_model(model_name: str) -> bool:
+    """
+    Check if a model is marked as expensive.
+
+    Args:
+        model_name: The model name to check.
+
+    Returns:
+        bool: True if the model is in the expensive list.
+    """
+    if not model_name:
+        return False
+    return model_name in get_expensive_models()
+
+
+def validate_default_model(model_name: str, source: str = "config") -> tuple[bool, str]:
+    """
+    Validate that a model is allowed to be used as a default.
+
+    Expensive models cannot be used as defaults in config.yaml or overview.md.
+    They must be explicitly specified via CLI argument.
+
+    Args:
+        model_name: The model name to validate.
+        source: Description of where the default was set (for error messages).
+
+    Returns:
+        tuple: (is_valid, error_message)
+    """
+    if not model_name:
+        return True, ""
+
+    if is_expensive_model(model_name):
+        expensive_list = get_expensive_models()
+        return False, (
+            f"Error: '{model_name}' is an expensive model and cannot be used as default in {source}.\n"
+            f"Expensive models ({', '.join(expensive_list)}) must be explicitly specified via CLI:\n"
+            f"  --model {model_name}     (for CLI mode)\n"
+            f"  --api-model {model_name} (for API mode)"
+        )
+
+    return True, ""
+
+
 if __name__ == "__main__":
     # Test the configuration loader
     config = load_system_config()

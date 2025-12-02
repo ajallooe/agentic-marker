@@ -79,6 +79,8 @@ STATS_FILE=""
 STATS_STAGE="unknown"
 STATS_CONTEXT=""
 MAX_TOKENS=""
+MODEL_FROM_CLI=false
+API_MODEL_FROM_CLI=false
 
 # Script directory for finding models.yaml
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -140,6 +142,85 @@ get_default_model_for_provider() {
             fi
         done < "$MODELS_CONFIG"
     fi
+}
+
+# ============================================================================
+# Check if a model is marked as expensive in models.yaml
+# ============================================================================
+is_expensive_model() {
+    local model_name="$1"
+
+    if [[ -z "$model_name" || ! -f "$MODELS_CONFIG" ]]; then
+        return 1  # Not expensive (or can't determine)
+    fi
+
+    # Look in expensive section
+    local in_expensive=false
+    while IFS= read -r line; do
+        if [[ "$line" =~ ^expensive: ]]; then
+            in_expensive=true
+        elif [[ "$in_expensive" == true && "$line" =~ ^[[:space:]]+-[[:space:]]*(.+) ]]; then
+            local expensive_model="${BASH_REMATCH[1]}"
+            expensive_model=$(echo "$expensive_model" | tr -d '"' | tr -d "'" | xargs)
+            if [[ "$expensive_model" == "$model_name" ]]; then
+                return 0  # Is expensive
+            fi
+        elif [[ "$in_expensive" == true && "$line" =~ ^[a-z]+: ]]; then
+            # New top-level section, stop
+            break
+        fi
+    done < "$MODELS_CONFIG"
+
+    return 1  # Not expensive
+}
+
+# ============================================================================
+# Get list of expensive models
+# ============================================================================
+get_expensive_models() {
+    if [[ ! -f "$MODELS_CONFIG" ]]; then
+        return
+    fi
+
+    local in_expensive=false
+    local models=""
+    while IFS= read -r line; do
+        if [[ "$line" =~ ^expensive: ]]; then
+            in_expensive=true
+        elif [[ "$in_expensive" == true && "$line" =~ ^[[:space:]]+-[[:space:]]*(.+) ]]; then
+            local model="${BASH_REMATCH[1]}"
+            model=$(echo "$model" | tr -d '"' | tr -d "'" | xargs)
+            models="${models:+$models, }$model"
+        elif [[ "$in_expensive" == true && "$line" =~ ^[a-z]+: ]]; then
+            break
+        fi
+    done < "$MODELS_CONFIG"
+
+    echo "$models"
+}
+
+# ============================================================================
+# Confirm expensive model usage
+# Returns 0 if user confirms, 1 if user declines or no response
+# ============================================================================
+confirm_expensive_model() {
+    local model_name="$1"
+    local expensive_list
+    expensive_list=$(get_expensive_models)
+
+    echo "" >&2
+    echo "⚠️  WARNING: '$model_name' is an expensive model!" >&2
+    echo "   Expensive models (${expensive_list}) have significantly higher costs." >&2
+    echo "" >&2
+    read -r -p "Do you want to proceed with '$model_name'? (yes/no) [no]: " response
+
+    # Default to 'no' if empty or anything other than explicit 'yes'
+    if [[ "${response,,}" == "yes" ]]; then
+        return 0
+    fi
+
+    echo "Aborted. Use a different model or explicitly confirm with 'yes'." >&2
+    return 1
 }
 
 # ============================================================================
@@ -245,10 +326,12 @@ while [[ $# -gt 0 ]]; do
             ;;
         --model)
             MODEL="$2"
+            MODEL_FROM_CLI=true
             shift 2
             ;;
         --api-model)
             API_MODEL="$2"
+            API_MODEL_FROM_CLI=true
             shift 2
             ;;
         --max-tokens)
@@ -356,6 +439,35 @@ fi
 if [[ -z "$PROVIDER" && -z "$API_MODEL" ]]; then
     echo "Error: --provider, --model, or --api-model is required" >&2
     exit 1
+fi
+
+# ============================================================================
+# Expensive model validation
+# - Expensive models cannot be used as defaults (config/overview.md)
+# - Expensive models from CLI require user confirmation
+# ============================================================================
+if [[ -n "$MODEL" ]] && is_expensive_model "$MODEL"; then
+    if [[ "$MODEL_FROM_CLI" != true ]]; then
+        # Expensive model loaded from config - not allowed
+        echo "Error: '$MODEL' is an expensive model and cannot be used as a default." >&2
+        echo "Expensive models must be explicitly specified via CLI argument:" >&2
+        echo "  --model $MODEL" >&2
+        echo "" >&2
+        echo "Remove '$MODEL' from your config.yaml or overview.md and specify it explicitly." >&2
+        exit 1
+    else
+        # Expensive model from CLI - require confirmation
+        if ! confirm_expensive_model "$MODEL"; then
+            exit 1
+        fi
+    fi
+fi
+
+if [[ -n "$API_MODEL" ]] && is_expensive_model "$API_MODEL"; then
+    # API model is always from CLI, but still requires confirmation
+    if ! confirm_expensive_model "$API_MODEL"; then
+        exit 1
+    fi
 fi
 
 # ============================================================================

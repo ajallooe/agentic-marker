@@ -55,16 +55,17 @@ def resolve_provider(model: str, models_config: Path) -> str | None:
 
 
 def call_anthropic(model: str, prompt: str, max_tokens: int = 8192) -> tuple[str, dict]:
-    """Call Anthropic API."""
+    """Call Anthropic/Claude API."""
     try:
         import anthropic
     except ImportError:
         print("Error: anthropic package not installed. Run: pip install anthropic", file=sys.stderr)
         sys.exit(1)
 
-    api_key = os.environ.get('ANTHROPIC_API_KEY')
+    # Check CLAUDE_API_KEY first, fall back to ANTHROPIC_API_KEY for compatibility
+    api_key = os.environ.get('CLAUDE_API_KEY') or os.environ.get('ANTHROPIC_API_KEY')
     if not api_key:
-        print("Error: ANTHROPIC_API_KEY environment variable not set", file=sys.stderr)
+        print("Error: CLAUDE_API_KEY (or ANTHROPIC_API_KEY) environment variable not set", file=sys.stderr)
         sys.exit(1)
 
     client = anthropic.Anthropic(api_key=api_key)

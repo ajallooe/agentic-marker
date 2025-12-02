@@ -237,20 +237,27 @@ defaults:
   codex:            # Default model for codex provider (optional)
 
 models:
-  # Claude models
+  # Claude models (Anthropic)
   claude-opus-4-5: claude
   claude-sonnet-4-5: claude
-  claude-sonnet-4: claude
   claude-haiku-4-5: claude
 
-  # Gemini models
+  # Gemini models (Google)
   gemini-3-pro-preview: gemini
   gemini-2.5-pro: gemini
   gemini-2.5-flash: gemini
+  gemini-2.5-flash-lite: gemini
 
   # OpenAI/Codex models
-  gpt-5.1-codex-max: codex
   gpt-5.1: codex
+  gpt-5-mini: codex
+  gpt-5-nano: codex
+  gpt-5-pro: codex
+
+# Expensive models (require CLI confirmation, cannot be defaults)
+expensive:
+  - claude-opus-4-5
+  - gpt-5-pro
 ```
 
 **How it works**:
@@ -259,6 +266,13 @@ models:
 - No need to specify both `--provider` and `--model`
 - Unknown models show an error with all available models listed
 - To add a new model, simply update `configs/models.yaml`
+
+**Expensive models**:
+
+- Models listed in the `expensive` section (e.g., `claude-opus-4-5`, `gpt-5-pro`) have higher costs
+- Cannot be set as defaults in `config.yaml` or `overview.md`
+- Must be explicitly specified via CLI argument (`--model` or `--api-model`)
+- Require user confirmation before proceeding (default: no)
 
 ### Global Defaults (`configs/config.yaml`)
 
@@ -742,7 +756,7 @@ pip install anthropic google-generativeai openai
 
 # 2. Set up API keys in .secrets/ directory
 mkdir -p .secrets
-echo "sk-ant-..." > .secrets/ANTHROPIC_API_KEY
+echo "sk-ant-..." > .secrets/CLAUDE_API_KEY
 echo "..." > .secrets/GEMINI_API_KEY
 echo "sk-..." > .secrets/OPENAI_API_KEY
 
@@ -778,8 +792,8 @@ Command: `claude`
 **Supported Models**:
 
 - `claude-sonnet-4-5` - Latest Sonnet (balanced performance and cost)
-- `claude-opus-4-5` - Most capable model (slower, more expensive)
 - `claude-haiku-4-5` - Fastest model (lower cost)
+- `claude-opus-4-5` - Most capable model (**expensive**, requires confirmation)
 
 **Model Aliases**:
 
@@ -793,9 +807,10 @@ Command: `gemini`
 
 **Supported Models**:
 
-- `gemini-2.5-pro` - Most capable Gemini model
+- `gemini-3-pro-preview` - Next-gen preview model
+- `gemini-2.5-pro` - Most capable stable Gemini model
 - `gemini-2.5-flash` - Fast and efficient
-- `gemini-2.0-flash` - Legacy model (still supported)
+- `gemini-2.5-flash-lite` - Fastest, lowest cost
 
 **Note**: Model availability depends on your Gemini CLI version and API access.
 
@@ -805,9 +820,10 @@ Command: `codex`
 
 **Supported Models**:
 
-- `gpt-5.1` - Latest GPT model
-- `gpt-5.1-codex-max` - Maximum reasoning capability
-- `gpt-5.1-codex-mini` - Faster, cost-effective
+- `gpt-5.1` - Latest GPT model (recommended)
+- `gpt-5-mini` - Faster, cost-effective
+- `gpt-5-nano` - Fastest, lowest cost
+- `gpt-5-pro` - Maximum reasoning capability (**expensive**, requires confirmation)
 
 **Important**: Codex CLI requires a real terminal (TTY) for interactive mode. When using Codex:
 
@@ -892,8 +908,8 @@ source load_api_keys.sh
 **Must be sourced** (not executed) for exports to persist in your shell.
 
 **Expected files in `.secrets/`:**
-- `ANTHROPIC_API_KEY` - For Claude API
-- `GEMINI_API_KEY` - For Google/Gemini API
+- `CLAUDE_API_KEY` - For Claude/Anthropic API (backward-compatible with `ANTHROPIC_API_KEY`)
+- `GEMINI_API_KEY` - For Google/Gemini API (also works as `GOOGLE_API_KEY`)
 - `OPENAI_API_KEY` - For OpenAI API
 
 ### Gradebook Translation (`utils/translate_grades.sh`)

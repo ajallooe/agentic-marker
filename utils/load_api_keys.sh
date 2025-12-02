@@ -33,10 +33,16 @@ if [[ ! -d "$SECRETS_DIR" ]]; then
     return 1 2>/dev/null || exit 1
 fi
 
-# Load Anthropic API key
-if [[ -f "$SECRETS_DIR/ANTHROPIC_API_KEY" ]]; then
+# Load Claude API key (Anthropic)
+if [[ -f "$SECRETS_DIR/CLAUDE_API_KEY" ]]; then
+    export CLAUDE_API_KEY="$(cat "$SECRETS_DIR/CLAUDE_API_KEY" | tr -d '\n')"
+    export ANTHROPIC_API_KEY="$CLAUDE_API_KEY"  # Alias for SDK compatibility
+    echo "Loaded CLAUDE_API_KEY (also set as ANTHROPIC_API_KEY)"
+elif [[ -f "$SECRETS_DIR/ANTHROPIC_API_KEY" ]]; then
+    # Backward compatibility
     export ANTHROPIC_API_KEY="$(cat "$SECRETS_DIR/ANTHROPIC_API_KEY" | tr -d '\n')"
-    echo "Loaded ANTHROPIC_API_KEY"
+    export CLAUDE_API_KEY="$ANTHROPIC_API_KEY"
+    echo "Loaded ANTHROPIC_API_KEY (also set as CLAUDE_API_KEY)"
 fi
 
 # Load Google/Gemini API key

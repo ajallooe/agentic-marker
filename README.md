@@ -768,9 +768,10 @@ source utils/load_api_keys.sh
 ```
 
 **Behavior with `--api-model`:**
-- Headless stages (marker, normalizer, unifier) use API calls
+- Headless stages (marker, normalizer, unifier, translator) use API calls
 - Interactive stages (pattern designer, dashboard) use CLI
 - With `--auto-approve`, ALL stages use API (fully automated)
+- Gradebook translation runs in headless API mode when `--api-model` is specified
 
 ```bash
 # Mixed workflow: API for headless, CLI for interactive
@@ -1119,6 +1120,21 @@ The script executes all rounds automatically without pauses:
 | 9 | Gradebook translation | Automatic |
 
 ## Troubleshooting
+
+### False "failed tasks" warnings
+
+If you see warnings about failed tasks when all students were successfully marked:
+
+- **Cause**: Stale logs from previous runs were triggering false positives
+- **Fixed in v1.x**: The system now detects failures by counting missing output files instead of checking stderr logs
+- **Automatic cleanup**: Old marker logs are cleaned before starting new runs
+
+### Quota errors showing wrong provider
+
+If quota errors mention a different provider than the one you're using (e.g., "GEMINI QUOTA" when using `--api-model gpt-5.1`):
+
+- **Fixed in v1.x**: The system now correctly resolves the provider from the `--api-model` name
+- **How it works**: `gpt-5.1` → `codex`, `claude-sonnet-4-5` → `claude`, `gemini-2.5-pro` → `gemini`
 
 ### "No submissions found"
 

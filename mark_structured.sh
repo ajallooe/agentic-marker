@@ -215,6 +215,15 @@ if [[ -n "$MODEL_OVERRIDE" ]]; then
     unset STAGE_MODEL_NORMALIZER
     unset STAGE_MODEL_UNIFIER
     unset STAGE_MODEL_AGGREGATOR
+
+    # When --model is provided but --provider is not, always resolve provider from model
+    # This overrides any default_provider from overview.md to avoid mismatches
+    if [[ -z "$PROVIDER_OVERRIDE" ]]; then
+        resolved_provider=$(resolve_provider_from_model "$MODEL_OVERRIDE" || true)
+        if [[ -n "$resolved_provider" ]]; then
+            DEFAULT_PROVIDER="$resolved_provider"
+        fi
+    fi
 fi
 
 # Resolve provider from model if not set (priority: CLI > overview.md > project default)

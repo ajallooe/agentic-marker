@@ -57,7 +57,8 @@ cp ~/Downloads/*.csv assignments/your-assignment-name/gradebooks/
 - `--force-xargs`: Force use of xargs instead of GNU parallel (for testing)
 - `--auto-approve`: Skip interactive stages (pattern design approval, dashboard approval)
 - `--provider NAME`: Override LLM provider (claude, gemini, or codex)
-- `--model NAME`: Override model name (provider auto-resolved from model name)
+- `--model NAME`: Override model name for CLI calls (provider auto-resolved)
+- `--api-model NAME`: Use direct API calls for headless stages (requires API key)
 
 ### Resume Options
 
@@ -723,11 +724,50 @@ Both parallel and xargs show clear progress tracking with percentages and task c
 
 ## Using Different LLM Providers
 
-The system supports multiple providers via CLI:
+The system supports multiple providers via **CLI tools** or **direct API calls**:
+
+### CLI Mode (Default)
 
 - **Claude Code**: `claude` command (default)
 - **Gemini**: `gemini` command (requires Gemini CLI)
 - **Codex**: `codex` command (requires Codex CLI)
+
+### API Mode (Optional)
+
+Use direct API calls instead of CLI tools for headless stages:
+
+```bash
+# 1. Install Python SDKs
+pip install anthropic google-generativeai openai
+
+# 2. Set up API keys in .secrets/ directory
+mkdir -p .secrets
+echo "sk-ant-..." > .secrets/ANTHROPIC_API_KEY
+echo "..." > .secrets/GEMINI_API_KEY
+echo "sk-..." > .secrets/OPENAI_API_KEY
+
+# 3. Load keys into environment
+source utils/load_api_keys.sh
+
+# 4. Run with --api-model flag
+./mark_structured.sh assignments/lab1 --api-model gemini-2.5-flash
+```
+
+**Behavior with `--api-model`:**
+- Headless stages (marker, normalizer, unifier) use API calls
+- Interactive stages (pattern designer, dashboard) use CLI
+- With `--auto-approve`, ALL stages use API (fully automated)
+
+```bash
+# Mixed workflow: API for headless, CLI for interactive
+./mark_structured.sh assignments/lab1 --api-model gpt-5.1
+
+# Full API workflow (no CLI needed)
+./mark_structured.sh assignments/lab1 --api-model gpt-5.1 --auto-approve
+
+# Batch marking with API
+./utils/batch_mark.sh assignments.txt --api-model gemini-2.5-pro --auto-approve
+```
 
 ### Available Providers and Models
 
@@ -836,6 +876,25 @@ codex exec "test"
 ## Utilities
 
 The system includes several standalone utilities in the `utils/` directory:
+
+### API Key Loader (`utils/load_api_keys.sh`)
+
+Load API keys from `.secrets/` directory into environment variables for API mode:
+
+```bash
+# From project root
+source utils/load_api_keys.sh
+
+# From utils/ directory
+source load_api_keys.sh
+```
+
+**Must be sourced** (not executed) for exports to persist in your shell.
+
+**Expected files in `.secrets/`:**
+- `ANTHROPIC_API_KEY` - For Claude API
+- `GEMINI_API_KEY` - For Google/Gemini API
+- `OPENAI_API_KEY` - For OpenAI API
 
 ### Gradebook Translation (`utils/translate_grades.sh`)
 

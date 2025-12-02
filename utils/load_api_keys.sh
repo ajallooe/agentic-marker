@@ -2,11 +2,12 @@
 #
 # Load API keys from .secrets/ directory into environment variables
 #
-# Usage (from project root): source utils/load_api_keys.sh
+# Usage:
+#   source utils/load_api_keys.sh     # from project root
+#   source load_api_keys.sh           # from utils/ directory
 #
-# NOTE: This file must be SOURCED, not executed, for the exports to persist:
-#   source utils/load_api_keys.sh   # correct
-#   ./utils/load_api_keys.sh        # wrong - exports won't persist
+# NOTE: This file must be SOURCED, not executed, for the exports to persist.
+# Sourcing runs it in your current shell so exports are available afterward.
 #
 
 # Find project root by looking for .secrets/ directory

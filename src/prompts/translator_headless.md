@@ -46,65 +46,65 @@ For each student in grades.csv, find their corresponding entry in a gradebook:
 
 ## OUTPUT FORMAT
 
-Output ONLY valid JSON with no additional text. Start your response with `{` and end with `}`.
+Output ONLY valid JSON with no additional text. Start your response with a curly brace and end with a curly brace.
 
 The JSON must have this exact structure:
 
 ```json
-{
+{{
   "assignment_name": "{assignment_name}",
   "total_marks": {total_marks},
   "assignment_type": "{assignment_type}",
   "grades_csv": "{grades_csv_path}",
   "gradebooks": [
-    {
+    {{
       "path": "[exact path from 'Full path' above]",
       "section_name": "[extracted from filename]",
       "encoding": "utf-8",
       "student_column": "[column name containing student names]",
-      "columns_to_add": {
-        "Total Mark": {
+      "columns_to_add": {{
+        "Total Mark": {{
           "position": -1,
           "description": "Total mark for {assignment_name}"
-        },
-        "Feedback Card": {
+        }},
+        "Feedback Card": {{
           "position": -1,
           "description": "Feedback for {assignment_name}"
-        }
-      },
+        }}
+      }},
       "student_mappings": [
-        {
+        {{
           "grades_name": "[exact name from grades.csv]",
           "gradebook_name": "[exact name from gradebook]",
           "confidence": 100,
           "match_method": "exact",
           "requires_review": false
-        }
+        }}
       ],
       "unmatched_grades": [
-        {
+        {{
           "name": "[student name from grades.csv]",
           "reason": "No matching student found in gradebook"
-        }
+        }}
       ],
       "unmatched_gradebook": [
-        {
+        {{
           "name": "[student name from gradebook]",
           "reason": "No submission in grades.csv"
-        }
+        }}
       ]
-    }
+    }}
   ],
   "warnings": [],
-  "summary": {
+  "summary": {{
     "total_students_in_grades": 0,
     "total_students_in_gradebooks": 0,
     "matched": 0,
     "unmatched_grades": 0,
     "unmatched_gradebook": 0,
     "requires_review": 0
-  }
-}
+  }}
+}}
 ```
 
 ## IMPORTANT REMINDERS
@@ -116,4 +116,4 @@ The JSON must have this exact structure:
 5. DO NOT include students with confidence < 85% in student_mappings - put them in unmatched_grades instead
 6. Calculate summary counts accurately
 
-Begin your response with `{` immediately.
+Begin your response with a curly brace immediately.

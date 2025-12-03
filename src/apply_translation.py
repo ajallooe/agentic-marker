@@ -45,6 +45,11 @@ def detect_encoding(file_path: str) -> str:
     return 'utf-8'
 
 
+def strip_bom(s: str) -> str:
+    """Strip BOM (Byte Order Mark) from a string."""
+    return s.lstrip('\ufeff')
+
+
 def get_student_name_from_row(row: Dict[str, str], student_col: str, fieldnames: List[str]) -> str:
     """Extract student name from a row, handling various column formats.
 
@@ -52,36 +57,41 @@ def get_student_name_from_row(row: Dict[str, str], student_col: str, fieldnames:
     - Single column with full name (e.g., "Student Name", "Name")
     - Separate first/last name columns (e.g., Moodle exports)
     - Various capitalizations
+    - BOM characters in column names (common in Excel exports)
     """
+    # Normalize row keys by stripping BOM
+    normalized_row = {strip_bom(k): v for k, v in row.items()}
+
     # Check for separate first/last name columns FIRST (Moodle-style)
     # This is the most common case for gradebook exports
     first_name = ''
     last_name = ''
 
     for col in ['First name', 'First Name', 'first_name', 'FirstName', 'first name']:
-        if col in row and row[col].strip():
-            first_name = row[col].strip()
+        if col in normalized_row and normalized_row[col].strip():
+            first_name = normalized_row[col].strip()
             break
 
     for col in ['Last name', 'Last Name', 'last_name', 'LastName', 'last name', 'Surname', 'surname']:
-        if col in row and row[col].strip():
-            last_name = row[col].strip()
+        if col in normalized_row and normalized_row[col].strip():
+            last_name = normalized_row[col].strip()
             break
 
     if first_name and last_name:
         return f"{first_name} {last_name}"
 
     # Try the specified column (for joined name formats)
-    if student_col in row and row[student_col].strip():
+    normalized_student_col = strip_bom(student_col)
+    if normalized_student_col in normalized_row and normalized_row[normalized_student_col].strip():
         # Only use this if it's not one of the first/last name columns
-        if student_col not in ['First name', 'First Name', 'first_name', 'FirstName', 'first name',
+        if normalized_student_col not in ['First name', 'First Name', 'first_name', 'FirstName', 'first name',
                                'Last name', 'Last Name', 'last_name', 'LastName', 'last name', 'Surname', 'surname']:
-            return row[student_col].strip()
+            return normalized_row[normalized_student_col].strip()
 
     # Check for common single-name columns
     for col in ['Student Name', 'student_name', 'Name', 'name', 'Full Name', 'full_name']:
-        if col in row and row[col].strip():
-            return row[col].strip()
+        if col in normalized_row and normalized_row[col].strip():
+            return normalized_row[col].strip()
 
     # Fallback to individual names if only one is available
     if first_name:

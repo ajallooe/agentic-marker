@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 #
-# Feedback Summarizer - Condense detailed feedback into single paragraphs
+# Feedback Summarizer - Add feedback summaries to gradebook CSV files
 #
 # Usage:
 #   ./utils/summarize_feedback.sh <grades.csv> [OPTIONS]
 #
-# This script takes a grades CSV with detailed feedback cards and uses an LLM
-# to summarize each student's feedback into a single plain text paragraph
-# suitable for gradebook comments.
+# This script takes a grades CSV (typically a _filled.csv gradebook) and adds
+# a "Feedback Summary" column with summarized feedback for each student.
+# The entire input file is copied with the new column added.
 #
 
 set -euo pipefail
@@ -32,12 +32,12 @@ usage() {
     cat << EOF
 Usage: $(basename "$0") <grades.csv> [OPTIONS]
 
-Summarize detailed feedback cards into single plain text paragraphs.
-Creates 3-4 sentence summaries focusing on mistakes and positives.
-For very low marks (<40%), provides more detailed explanations.
+Add feedback summaries to a grades CSV file. Copies the entire input file
+and adds a "Feedback Summary" column with 3-4 sentence summaries focusing
+on mistakes and positives. For very low marks (<40%), provides more detail.
 
 Arguments:
-  grades.csv              Path to the grades CSV file (with Feedback Card column)
+  grades.csv              Path to the grades CSV file (e.g., a _filled.csv gradebook)
 
 Options:
   --output <file>         Output CSV file (default: <input>_summarized.csv)
@@ -45,12 +45,13 @@ Options:
   --model <model>         Specific model to use (optional)
   --total-marks <n>       Total possible marks (default: 100)
   --feedback-col <name>   Name of feedback column (auto-detected if not specified)
+  --summary-col <name>    Name of summary column to add (default: "Feedback Summary")
   --dry-run               Preview without calling LLM
   --help                  Show this help message
 
 Examples:
-  # Summarize feedback from grades.csv
-  ./utils/summarize_feedback.sh assignments/lab1/processed/final/grades.csv
+  # Add summaries to a filled gradebook
+  ./utils/summarize_feedback.sh assignments/lab1/gradebooks/section1_filled.csv
 
   # Use Gemini with specific model
   ./utils/summarize_feedback.sh grades.csv --provider gemini --model gemini-2.5-pro
@@ -59,7 +60,7 @@ Examples:
   ./utils/summarize_feedback.sh grades.csv --total-marks 50
 
   # Specify output file
-  ./utils/summarize_feedback.sh grades.csv --output summaries.csv
+  ./utils/summarize_feedback.sh grades.csv --output final_grades.csv
 
   # Preview what would be done
   ./utils/summarize_feedback.sh grades.csv --dry-run
@@ -81,7 +82,7 @@ while [[ $# -gt 0 ]]; do
         --help)
             usage
             ;;
-        --output|--provider|--model|--feedback-col|--total-marks)
+        --output|--provider|--model|--feedback-col|--summary-col|--total-marks)
             EXTRA_ARGS+=("$1" "$2")
             shift 2
             ;;

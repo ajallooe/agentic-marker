@@ -2,12 +2,14 @@
 """
 Feedback Summarizer Utility
 
-Takes a grades CSV file and summarizes each student's feedback card into
-a single plain text paragraph suitable for gradebook comments.
+Takes a grades CSV file (typically a _filled.csv gradebook) and adds a
+"Feedback Summary" column with summarized feedback for each student.
+The entire input file is copied with the new column added.
 """
 
 import argparse
 import csv
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -40,16 +42,6 @@ Detailed Feedback:
 {feedback}
 
 Write a single paragraph summary (plain text only, 3-4 sentences, or 5-6 for very low marks):"""
-
-
-def load_grades_csv(csv_path: Path) -> list:
-    """Load grades CSV and return list of student records."""
-    records = []
-    with open(csv_path, 'r', encoding='utf-8') as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            records.append(row)
-    return records
 
 
 def call_llm(prompt: str, provider: str, model: str = None, api_model: str = None) -> str:
@@ -172,11 +164,11 @@ def get_feedback(row: dict) -> str:
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Summarize feedback cards into single paragraphs'
+        description='Add feedback summaries to a grades CSV file'
     )
     parser.add_argument(
         'csv_file',
-        help='Path to the grades CSV file'
+        help='Path to the grades CSV file (e.g., a _filled.csv gradebook)'
     )
     parser.add_argument(
         '--output',
@@ -199,6 +191,11 @@ def main():
     parser.add_argument(
         '--feedback-col',
         help='Name of the feedback column (auto-detected if not specified)'
+    )
+    parser.add_argument(
+        '--summary-col',
+        default='Feedback Summary',
+        help='Name of the summary column to add (default: "Feedback Summary")'
     )
     parser.add_argument(
         '--dry-run',
@@ -239,17 +236,29 @@ def main():
     else:
         output_path = csv_path.parent / f"{csv_path.stem}_summarized{csv_path.suffix}"
 
-    print(f"Loading grades from: {csv_path}")
-    records = load_grades_csv(csv_path)
-    print(f"Found {len(records)} students")
+    print(f"Loading CSV from: {csv_path}")
+
+    # Read the entire CSV file preserving all columns
+    with open(csv_path, 'r', encoding='utf-8') as f:
+        reader = csv.DictReader(f)
+        fieldnames = list(reader.fieldnames) if reader.fieldnames else []
+        records = list(reader)
+
+    print(f"Found {len(records)} rows, {len(fieldnames)} columns")
 
     if not records:
         print("No records found in CSV")
         sys.exit(1)
 
-    # Process each student
-    summaries = []
+    # Add summary column if not present
+    summary_col = args.summary_col
+    if summary_col not in fieldnames:
+        fieldnames.append(summary_col)
+        print(f"Adding column: {summary_col}")
+    else:
+        print(f"Column '{summary_col}' already exists, will be updated")
 
+    # Process each student
     for i, row in enumerate(records, 1):
         student_name = get_student_name(row)
         total_mark = get_total_mark(row)
@@ -276,21 +285,17 @@ def main():
             )
             print("done")
 
-        summaries.append({
-            'Student Name': student_name,
-            'Total Mark': total_mark,
-            'Summary': summary
-        })
+        # Add summary to the row
+        row[summary_col] = summary
 
-    # Write output CSV
-    print(f"\nWriting summaries to: {output_path}")
+    # Write output CSV with all original columns plus summary
+    print(f"\nWriting to: {output_path}")
     with open(output_path, 'w', newline='', encoding='utf-8') as f:
-        writer = csv.DictWriter(f, fieldnames=['Student Name', 'Total Mark', 'Summary'],
-                                quoting=csv.QUOTE_ALL)
+        writer = csv.DictWriter(f, fieldnames=fieldnames, quoting=csv.QUOTE_ALL)
         writer.writeheader()
-        writer.writerows(summaries)
+        writer.writerows(records)
 
-    print(f"\n✓ Summarized {len(summaries)} feedback cards")
+    print(f"\n✓ Summarized {len(records)} feedback cards")
     print(f"✓ Output saved to: {output_path}")
 
 

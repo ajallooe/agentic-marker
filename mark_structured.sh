@@ -1022,6 +1022,12 @@ if [[ -d "$GRADEBOOKS_DIR" ]] && compgen -G "$GRADEBOOKS_DIR/*.csv" > /dev/null;
                             if [[ $? -eq 0 ]]; then
                                 SUMMARIZED_CSV="${filled_csv%.csv}_summarized.csv"
                                 log_success "Summary created: $(basename "$SUMMARIZED_CSV")"
+
+                                # Clean artifacts from the summarized file
+                                if [[ $CLEAN_ARTIFACTS == true && -f "$SUMMARIZED_CSV" ]]; then
+                                    log_info "Cleaning artifacts from $(basename "$SUMMARIZED_CSV")..."
+                                    python3 "$SRC_DIR/clean_artifacts.py" "$SUMMARIZED_CSV" --in-place --quiet
+                                fi
                             else
                                 log_warning "Summary generation failed for $(basename "$filled_csv")"
                             fi

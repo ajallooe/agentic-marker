@@ -531,11 +531,11 @@ Protect assignment files from accidental modification during marking:
 
 ### `utils/summarize_feedback.sh`
 
-Condense detailed feedback cards into single plain-text paragraphs for gradebook comments:
+Add feedback summaries to a grades CSV file. Copies the entire input file and adds a "Feedback Summary" column:
 
 ```bash
-# Summarize feedback from grades.csv
-./utils/summarize_feedback.sh assignments/lab1/processed/final/grades.csv
+# Add summaries to a filled gradebook
+./utils/summarize_feedback.sh assignments/lab1/gradebooks/section1_filled.csv
 
 # Use specific provider and model
 ./utils/summarize_feedback.sh grades.csv --provider gemini --model gemini-2.5-pro
@@ -544,13 +544,13 @@ Condense detailed feedback cards into single plain-text paragraphs for gradebook
 ./utils/summarize_feedback.sh grades.csv --total-marks 50
 
 # Specify custom output file
-./utils/summarize_feedback.sh grades.csv --output summaries.csv
+./utils/summarize_feedback.sh grades.csv --output final_grades.csv
 
 # Preview without calling LLM
 ./utils/summarize_feedback.sh grades.csv --dry-run
 ```
 
-Creates 3-4 sentence summaries focusing on key mistakes and positives. For very low marks (<40%), provides more detailed explanations. Output: `<input>_summarized.csv`.
+Creates 3-4 sentence summaries focusing on key mistakes and positives. For very low marks (<40%), provides more detailed explanations. The output file contains all original columns plus the new "Feedback Summary" column. Output: `<input>_summarized.csv`.
 
 ### `utils/modify_feedback.sh`
 

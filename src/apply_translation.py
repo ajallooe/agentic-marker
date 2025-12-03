@@ -53,11 +53,14 @@ def strip_bom(s: str) -> str:
 def normalize_name(name: str) -> str:
     """Normalize a name for comparison.
 
+    - Handles None/empty values
     - Strips BOM
     - Replaces commas with spaces (LLM sometimes joins First,Last instead of First Last)
     - Normalizes whitespace
     - Case-insensitive (lowercased)
     """
+    if not name:
+        return ''
     name = strip_bom(name)
     name = name.replace(',', ' ')  # Handle "First,Last" -> "First Last"
     name = ' '.join(name.split())  # Normalize whitespace

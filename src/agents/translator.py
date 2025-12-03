@@ -48,11 +48,16 @@ def read_csv_content(csv_path: str, max_lines: int = None) -> str:
 
 def load_prompt_template(assignment_name: str, total_marks: int, assignment_type: str,
                          grades_csv_path: str, gradebook_paths: list,
-                         output_path: str) -> str:
+                         output_path: str, headless: bool = False) -> str:
     """Load and fill the translator prompt template."""
 
     script_dir = Path(__file__).parent.parent
-    template_path = script_dir / 'prompts' / 'translator.md'
+
+    # Use headless prompt for API mode
+    if headless:
+        template_path = script_dir / 'prompts' / 'translator_headless.md'
+    else:
+        template_path = script_dir / 'prompts' / 'translator.md'
 
     with open(template_path, 'r', encoding='utf-8') as f:
         template = f.read()
@@ -238,10 +243,14 @@ def run_translator(assignment_name: str, total_marks: int, assignment_type: str,
     import subprocess
     import json
 
+    # Use headless prompt for API mode
+    headless = api_model is not None
+
     # Build prompt
     prompt = load_prompt_template(
         assignment_name, total_marks, assignment_type,
-        grades_csv_path, gradebook_paths, output_path
+        grades_csv_path, gradebook_paths, output_path,
+        headless=headless
     )
 
     # Prepare LLM caller command
@@ -276,15 +285,27 @@ def run_translator(assignment_name: str, total_marks: int, assignment_type: str,
         with open(session_log, 'w', encoding='utf-8') as f:
             f.write(api_output)
 
-        # Extract JSON from the response
-        json_content = extract_json_from_output(api_output)
+        # Try to parse the output as JSON directly first (headless prompt outputs pure JSON)
+        # Handle case where output starts with { (raw JSON)
+        json_start = api_output.find('{')
+        if json_start != -1:
+            # Find matching closing brace
+            potential_json = api_output[json_start:]
+            brace_count = 0
+            end_idx = 0
+            for i, char in enumerate(potential_json):
+                if char == '{':
+                    brace_count += 1
+                elif char == '}':
+                    brace_count -= 1
+                    if brace_count == 0:
+                        end_idx = i
+                        break
 
-        if not json_content:
-            # Try to find JSON directly in the output
-            if '===MAPPING_JSON_START===' not in api_output:
-                # Try to parse the entire output as JSON
+            if end_idx > 0:
+                json_candidate = potential_json[:end_idx + 1]
                 try:
-                    mapping_data = json.loads(api_output)
+                    mapping_data = json.loads(json_candidate)
                     mapping_file = Path(output_path) / 'translation_mapping.json'
                     with open(mapping_file, 'w', encoding='utf-8') as f:
                         json.dump(mapping_data, f, indent=2, ensure_ascii=False)
@@ -293,6 +314,10 @@ def run_translator(assignment_name: str, total_marks: int, assignment_type: str,
                 except json.JSONDecodeError:
                     pass
 
+        # Fall back to marker-based extraction
+        json_content = extract_json_from_output(api_output)
+
+        if not json_content:
             print("\nError: Could not find mapping JSON in API output.")
             print("Response preview:")
             print(api_output[:1000] if len(api_output) > 1000 else api_output)

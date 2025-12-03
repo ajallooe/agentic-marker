@@ -55,6 +55,7 @@ cp ~/Downloads/*.csv assignments/your-assignment-name/gradebooks/
 - `--no-resume`: Start from scratch, ignoring previous progress
 - `--clean`: Remove processed directory and start completely fresh
 - `--force-xargs`: Force use of xargs instead of GNU parallel (for testing)
+- `--force-complete`: Continue to completion even if some tasks fail (assigns zero marks to failed students)
 - `--auto-approve`: Skip interactive stages (pattern design approval, dashboard approval)
 - `--provider NAME`: Override LLM provider (claude, gemini, or codex)
 - `--model NAME`: Override model name for CLI calls (provider auto-resolved)
@@ -99,6 +100,38 @@ The marking scripts automatically resume from where they left off by default. If
 ./mark_structured.sh assignments/lab1
 # Output: "Generated 28 marker tasks (skipped 196 already completed)"
 ```
+
+### Force Complete Mode
+
+When you need to complete marking despite some failures (e.g., deadline pressure, persistent API errors), use the `--force-complete` flag:
+
+```bash
+# Complete marking even if some students fail
+./mark_structured.sh assignments/lab1 --force-complete
+
+# Combine with resume to retry first, then force complete remaining failures
+./mark_structured.sh assignments/lab1 --force-complete
+
+# In batch mode
+./utils/batch_mark.sh assignments.txt --model gemini-2.5-pro --force-complete
+```
+
+**What `--force-complete` does**:
+
+- **Continues past parallel task failures**: The workflow proceeds even when marker/unifier tasks fail
+- **Generates zero-mark placeholders**: Failed students receive feedback files with:
+  - Zero marks for all activities
+  - Clear "REQUIRES MANUAL REVIEW" notice
+  - Error details explaining what went wrong
+- **Completes all stages**: Proceeds through aggregation, translation, and summarization
+
+**When to use**:
+
+- Deadline pressure and some students persistently fail
+- API quota exhausted and you can't wait
+- You plan to manually grade the failed students later
+
+**Important**: After using `--force-complete`, search the grades.csv for "REQUIRES MANUAL REVIEW" to identify students needing attention.
 
 ### Auto-Approve Mode
 
@@ -1675,6 +1708,16 @@ The translator uses multiple strategies in order of preference:
 
 Only high-confidence matches (>80%) are made automatically. Low-confidence matches are flagged for review.
 
+### Robust Name Handling
+
+The translation system automatically handles common CSV format issues:
+
+- **Excel BOM**: Strips UTF-8 BOM characters (`\ufeff`) from Excel exports that can break column name matching
+- **Name format normalization**: Handles "First,Last" vs "First Last" (LLM sometimes joins names with commas)
+- **Whitespace normalization**: Trims and normalizes multiple spaces in names
+- **Case insensitivity**: All matching is case-insensitive
+- **Flexible column detection**: Automatically detects separate "First name"/"Last name" columns or combined "Student Name" column
+
 ### Example
 
 ```bash
@@ -1718,6 +1761,16 @@ Only high-confidence matches (>80%) are made automatically. Low-confidence match
 **"Column already exists"**:
 - Existing columns will be overwritten with new values
 - Backups are created automatically
+
+**"0 updates applied" after translation**:
+- Usually caused by Excel BOM characters in CSV column names
+- The system now automatically strips BOM characters
+- If using an older version, re-export the gradebook or manually remove BOM
+
+**Names not matching despite appearing identical**:
+- Check for invisible characters or different Unicode representations
+- The system normalizes whitespace, handles commas vs spaces, and is case-insensitive
+- Review the translation mapping JSON to see how names were parsed
 
 ## License
 

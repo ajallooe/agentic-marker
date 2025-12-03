@@ -73,7 +73,9 @@ def call_llm(prompt: str, provider: str, model: str = None, api_model: str = Non
         )
 
         if result.returncode != 0:
-            raise RuntimeError(f"LLM call failed: {result.stderr}")
+            # Combine stderr and stdout for error reporting (some CLIs output errors to stdout)
+            error_msg = result.stderr.strip() or result.stdout.strip() or f"exit code {result.returncode}"
+            raise RuntimeError(f"LLM call failed: {error_msg}")
 
         return result.stdout.strip()
     finally:

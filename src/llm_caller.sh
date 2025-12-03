@@ -764,6 +764,7 @@ case "$PROVIDER" in
             exit 1
         fi
         call_claude
+        exit $?
         ;;
     gemini)
         if ! command -v gemini &> /dev/null; then
@@ -771,6 +772,7 @@ case "$PROVIDER" in
             exit 1
         fi
         call_gemini
+        exit $?
         ;;
     codex|openai)
         if ! command -v codex &> /dev/null; then
@@ -778,6 +780,7 @@ case "$PROVIDER" in
             exit 1
         fi
         call_codex
+        exit $?
         ;;
     *)
         echo "Error: Unknown provider '$PROVIDER'" >&2
@@ -785,5 +788,3 @@ case "$PROVIDER" in
         exit 1
         ;;
 esac
-
-exit 0

@@ -966,10 +966,14 @@ if [[ -d "$GRADEBOOKS_DIR" ]] && compgen -G "$GRADEBOOKS_DIR/*.csv" > /dev/null;
                 echo ""
             fi
 
-            log_warning "Review the mapping before applying:"
-            log_info "  Mapping file: $TRANSLATION_MAPPING"
-            log_info ""
-            read -p "Press Enter to apply translation, or Ctrl+C to skip..."
+            if [[ "$AUTO_APPROVE" == true ]]; then
+                log_info "Auto-approve mode: applying translation automatically..."
+            else
+                log_warning "Review the mapping before applying:"
+                log_info "  Mapping file: $TRANSLATION_MAPPING"
+                log_info ""
+                read -p "Press Enter to apply translation, or Ctrl+C to skip..."
+            fi
 
             # Apply translation
             log_info "Applying translation to gradebooks..."

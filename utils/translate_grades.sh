@@ -155,19 +155,31 @@ eval "$("$SRC_DIR/utils/config_parser.py" "$OVERVIEW_FILE" --bash)"
 MODELS_CONFIG="$PROJECT_ROOT/configs/models.yaml"
 
 # Resolve provider from model name (strict - must be in models.yaml)
+# Args: model_name, section (api_models|cli_models, default: api_models)
 resolve_provider_from_model() {
     local model_name="$1"
+    local section="${2:-api_models}"
 
-    # Only allow models explicitly listed in models.yaml
-    if [[ -f "$MODELS_CONFIG" ]]; then
-        local provider
-        provider=$(grep -E "^[[:space:]]*${model_name}:" "$MODELS_CONFIG" 2>/dev/null | \
-                   sed 's/.*:[[:space:]]*//' | tr -d '"' | tr -d "'" || true)
-        if [[ -n "$provider" ]]; then
+    if [[ ! -f "$MODELS_CONFIG" ]]; then
+        return 1
+    fi
+
+    # Look for model in specified section
+    local in_section=false
+    local provider=""
+
+    while IFS= read -r line; do
+        if [[ "$line" =~ ^${section}: ]]; then
+            in_section=true
+        elif [[ "$in_section" == true && "$line" =~ ^[a-z_]+: && ! "$line" =~ ^[[:space:]] ]]; then
+            break
+        elif [[ "$in_section" == true && "$line" =~ ^[[:space:]]+${model_name}:[[:space:]]*(.+) ]]; then
+            provider="${BASH_REMATCH[1]}"
+            provider=$(echo "$provider" | tr -d '"' | tr -d "'" | xargs)
             echo "$provider"
             return 0
         fi
-    fi
+    done < "$MODELS_CONFIG"
 
     # No fallback - model must be in models.yaml to catch typos
     return 1
@@ -182,33 +194,49 @@ show_available_models() {
         return
     fi
 
-    local in_models=false
-    local claude_models=""
-    local gemini_models=""
-    local codex_models=""
+    local section=""
+    local api_claude="" api_gemini="" api_codex=""
+    local cli_claude="" cli_gemini="" cli_codex=""
 
     while IFS= read -r line; do
-        if [[ "$line" =~ ^models: ]]; then
-            in_models=true
-        elif [[ "$in_models" == true && "$line" =~ ^[a-z]+: && ! "$line" =~ ^[[:space:]] ]]; then
-            break
-        elif [[ "$in_models" == true && "$line" =~ ^[[:space:]]+([^:]+):[[:space:]]*(.+) ]]; then
+        if [[ "$line" =~ ^api_models: ]]; then
+            section="api"
+        elif [[ "$line" =~ ^cli_models: ]]; then
+            section="cli"
+        elif [[ "$line" =~ ^[a-z_]+: && ! "$line" =~ ^[[:space:]] ]]; then
+            section=""
+        elif [[ -n "$section" && "$line" =~ ^[[:space:]]+([^:]+):[[:space:]]*(.+) ]]; then
             local model_name="${BASH_REMATCH[1]}"
             local provider="${BASH_REMATCH[2]}"
             model_name=$(echo "$model_name" | tr -d '"' | tr -d "'" | xargs)
             provider=$(echo "$provider" | tr -d '"' | tr -d "'" | xargs)
 
-            case "$provider" in
-                claude) claude_models="${claude_models:+$claude_models, }$model_name" ;;
-                gemini) gemini_models="${gemini_models:+$gemini_models, }$model_name" ;;
-                codex) codex_models="${codex_models:+$codex_models, }$model_name" ;;
-            esac
+            if [[ "$section" == "api" ]]; then
+                case "$provider" in
+                    claude) api_claude="${api_claude:+$api_claude, }$model_name" ;;
+                    gemini) api_gemini="${api_gemini:+$api_gemini, }$model_name" ;;
+                    codex) api_codex="${api_codex:+$api_codex, }$model_name" ;;
+                esac
+            else
+                case "$provider" in
+                    claude) cli_claude="${cli_claude:+$cli_claude, }$model_name" ;;
+                    gemini) cli_gemini="${cli_gemini:+$cli_gemini, }$model_name" ;;
+                    codex) cli_codex="${cli_codex:+$cli_codex, }$model_name" ;;
+                esac
+            fi
         fi
     done < "$MODELS_CONFIG"
 
-    echo "  claude: ${claude_models:-(none configured)}"
-    echo "  gemini: ${gemini_models:-(none configured)}"
-    echo "  codex:  ${codex_models:-(none configured)}"
+    echo ""
+    echo "  API models (--api-model):"
+    echo "    claude: ${api_claude:-(none)}"
+    echo "    gemini: ${api_gemini:-(none)}"
+    echo "    codex:  ${api_codex:-(none)}"
+    echo ""
+    echo "  CLI models (--model):"
+    echo "    claude: ${cli_claude:-(none)}"
+    echo "    gemini: ${cli_gemini:-(none)}"
+    echo "    codex:  ${cli_codex:-(none)}"
     echo ""
     echo "To add a new model, update configs/models.yaml"
 }
@@ -218,18 +246,27 @@ PROVIDER="${PROVIDER:-$DEFAULT_PROVIDER}"
 MODEL="${MODEL:-${DEFAULT_MODEL:-}}"
 
 # Resolve provider from model if not set
-if [[ -z "$PROVIDER" && -n "$MODEL" ]]; then
-    PROVIDER=$(resolve_provider_from_model "$MODEL" || true)
+# Priority: --api-model (for headless translation), then --model
+if [[ -z "$PROVIDER" && -n "$API_MODEL" ]]; then
+    PROVIDER=$(resolve_provider_from_model "$API_MODEL" "api_models" || true)
     if [[ -z "$PROVIDER" ]]; then
-        log_error "Unknown model '$MODEL'"
+        log_error "Unknown API model '$API_MODEL'"
+        echo ""
+        show_available_models
+        exit 1
+    fi
+elif [[ -z "$PROVIDER" && -n "$MODEL" ]]; then
+    PROVIDER=$(resolve_provider_from_model "$MODEL" "cli_models" || true)
+    if [[ -z "$PROVIDER" ]]; then
+        log_error "Unknown CLI model '$MODEL'"
         echo ""
         show_available_models
         exit 1
     fi
 fi
 
-if [[ -z "$PROVIDER" && -z "$MODEL" ]]; then
-    log_error "--model or --provider is required (or set default_provider in overview.md)"
+if [[ -z "$PROVIDER" && -z "$MODEL" && -z "$API_MODEL" ]]; then
+    log_error "--model, --api-model, or --provider is required (or set default_provider in overview.md)"
     exit 1
 fi
 

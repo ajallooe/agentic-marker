@@ -163,6 +163,13 @@ if command -v parallel &> /dev/null && [[ $FORCE_XARGS == false ]]; then
     if [[ $VERBOSE == true ]]; then
         echo "" >&2
 
+        # Record baseline count of existing stdout files (from previous runs)
+        if [[ -n "$OUTPUT_DIR" ]]; then
+            BASELINE_COUNT=$(find "$OUTPUT_DIR" -name stdout -type f 2>/dev/null | wc -l | tr -d ' ')
+        else
+            BASELINE_COUNT=0
+        fi
+
         # Run parallel in background
         if [[ -n "$COMMAND" ]]; then
             cat "$TASKS_FILE" | eval "$PARALLEL_CMD" "$COMMAND" > "$PARALLEL_LOG" 2>&1 &
@@ -175,8 +182,10 @@ if command -v parallel &> /dev/null && [[ $FORCE_XARGS == false ]]; then
         # Monitor progress with detailed information
         while kill -0 $PARALLEL_PID 2>/dev/null; do
             if [[ -n "$OUTPUT_DIR" ]]; then
-                # Count completed tasks by checking stdout files
-                COMPLETED=$(find "$OUTPUT_DIR" -name stdout -type f 2>/dev/null | wc -l | tr -d ' ')
+                # Count completed tasks by checking stdout files (subtract baseline)
+                TOTAL_STDOUT=$(find "$OUTPUT_DIR" -name stdout -type f 2>/dev/null | wc -l | tr -d ' ')
+                COMPLETED=$((TOTAL_STDOUT - BASELINE_COUNT))
+                if [[ $COMPLETED -lt 0 ]]; then COMPLETED=0; fi
                 PERCENT=$((COMPLETED * 100 / TOTAL_TASKS))
 
                 # Count errors (stderr files with content)

@@ -97,21 +97,39 @@ show_help() {
 
 # ============================================================================
 # Resolve provider from model name using models.yaml (strict validation)
+# Checks both api_models and cli_models sections
 # ============================================================================
 resolve_provider_from_model() {
     local model_name="$1"
+    local section="${2:-}"  # Optional: api_models or cli_models
 
-    # Only allow models explicitly listed in models.yaml
-    # This catches typos like 'gemini-pro-2.5' instead of 'gemini-2.5-pro'
-    if [[ -f "$MODELS_CONFIG" ]]; then
-        local provider
-        provider=$(grep -E "^[[:space:]]*${model_name}:" "$MODELS_CONFIG" 2>/dev/null | \
-                   sed 's/.*:[[:space:]]*//' | tr -d '"' | tr -d "'" || true)
-        if [[ -n "$provider" ]]; then
-            echo "$provider"
-            return 0
-        fi
+    if [[ ! -f "$MODELS_CONFIG" ]]; then
+        return 1
     fi
+
+    # Determine which sections to check
+    local sections_to_check
+    if [[ -n "$section" ]]; then
+        sections_to_check="$section"
+    else
+        sections_to_check="api_models cli_models"
+    fi
+
+    for sec in $sections_to_check; do
+        local in_section=false
+        while IFS= read -r line; do
+            if [[ "$line" =~ ^${sec}: ]]; then
+                in_section=true
+            elif [[ "$in_section" == true && "$line" =~ ^[a-z_]+: && ! "$line" =~ ^[[:space:]] ]]; then
+                in_section=false
+            elif [[ "$in_section" == true && "$line" =~ ^[[:space:]]+${model_name}:[[:space:]]*(.+) ]]; then
+                local provider="${BASH_REMATCH[1]}"
+                provider=$(echo "$provider" | tr -d '"' | tr -d "'" | xargs)
+                echo "$provider"
+                return 0
+            fi
+        done < "$MODELS_CONFIG"
+    done
 
     # No fallback - model must be in models.yaml
     return 1

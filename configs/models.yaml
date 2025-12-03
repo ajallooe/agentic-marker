@@ -1,30 +1,28 @@
 # Model Configuration for Agentic Notebook Marker
 #
-# This file maps model names to their providers and defines default models.
-# Used by llm_caller.sh and other scripts to auto-resolve providers.
+# This file defines model names for API and CLI usage, and identifies expensive models.
 #
 # Structure:
 #   defaults:
 #     <provider>: <model>   # Default model for each provider (optional)
 #
-#   models:
-#     <model_name>: <provider>   # Model-to-provider mapping
+#   api_models:
+#     <model_name>: <provider>   # Models for direct API calls (headless mode)
+#
+#   cli_models:
+#     <model_name>: <provider>   # Models for CLI tools (interactive mode)
 #
 #   expensive:
-#     - <model_name>   # Models requiring user confirmation (high cost)
+#     - <model_name>   # Models requiring explicit user confirmation (high cost)
 #
-# When a model is specified:
-#   1. Look up the provider from the models section
-#   2. If not found, try to infer from model name prefix
-#
-# When no model is specified:
-#   1. Use the default model for the provider (if set)
-#   2. If no default, call the CLI without --model (uses CLI's built-in default)
+# Usage:
+#   --api-model <name>  Uses api_models for provider resolution
+#   --model <name>      Uses cli_models for provider resolution
 #
 # Expensive models:
 #   - Cannot be used as project or assignment defaults
 #   - Require explicit CLI argument to invoke
-#   - Prompt for user confirmation before use
+#   - Prompt for user confirmation before use (unless --yes flag)
 
 # Default models for each provider (optional)
 # Leave blank or omit to use the CLI tool's built-in default
@@ -33,27 +31,48 @@ defaults:
   gemini:           # e.g., gemini-2.5-pro
   codex:            # e.g., gpt-5.1
 
-# Model name to provider mappings
-# Add new models here as they become available
-models:
-  # Claude models (Anthropic)
+# API models - for direct API calls (headless mode with --api-model)
+# These are model identifiers recognized by the provider's API
+api_models:
+  # Claude API models (Anthropic)
   claude-opus-4-5: claude
   claude-sonnet-4-5: claude
   claude-haiku-4-5: claude
 
-  # Gemini models (Google)
+  # Gemini API models (Google)
   gemini-3-pro-preview: gemini
   gemini-2.5-pro: gemini
   gemini-2.5-flash: gemini
   gemini-2.5-flash-lite: gemini
 
-  # OpenAI/Codex models
+  # OpenAI API models
   gpt-5.1: codex
   gpt-5-mini: codex
   gpt-5-nano: codex
   gpt-5-pro: codex
 
-# Expensive models requiring user confirmation
+# CLI models - for CLI tools (interactive mode with --model)
+# These are model identifiers recognized by the CLI tools (claude, gemini, codex)
+cli_models:
+  # Claude CLI models
+  claude-opus-4-5: claude
+  claude-sonnet-4-5: claude
+  claude-haiku-4-5: claude
+
+  # Gemini CLI models
+  gemini-3-pro-preview: gemini
+  gemini-2.5-pro: gemini
+  gemini-2.5-flash: gemini
+  gemini-2.5-flash-lite: gemini
+
+  # Codex CLI models (OpenAI)
+  gpt-5.1: codex
+  gpt-5.1-codex-max: codex
+  gpt-5-mini: codex
+  gpt-5-nano: codex
+  gpt-5-pro: codex
+
+# Expensive models requiring explicit user confirmation
 # These models have significantly higher costs and:
 #   - Cannot be set as default_model in config.yaml or overview.md
 #   - Require explicit --model or --api-model CLI argument
@@ -61,3 +80,4 @@ models:
 expensive:
   - claude-opus-4-5
   - gpt-5-pro
+  - gpt-5.1-codex-max

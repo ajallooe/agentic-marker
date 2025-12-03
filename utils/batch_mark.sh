@@ -70,21 +70,59 @@ log_round() {
 MODELS_CONFIG="$PROJECT_ROOT/configs/models.yaml"
 
 # Resolve provider from model name (strict - must be in models.yaml)
+# Args: model_name, section (api_models|cli_models, default: api_models)
 resolve_provider_from_model() {
     local model_name="$1"
+    local section="${2:-api_models}"
 
-    # Only allow models explicitly listed in models.yaml
-    if [[ -f "$MODELS_CONFIG" ]]; then
-        local provider
-        provider=$(grep -E "^[[:space:]]*${model_name}:" "$MODELS_CONFIG" 2>/dev/null | \
-                   sed 's/.*:[[:space:]]*//' | tr -d '"' | tr -d "'" || true)
-        if [[ -n "$provider" ]]; then
+    if [[ ! -f "$MODELS_CONFIG" ]]; then
+        return 1
+    fi
+
+    # Look for model in specified section
+    local in_section=false
+    local provider=""
+
+    while IFS= read -r line; do
+        if [[ "$line" =~ ^${section}: ]]; then
+            in_section=true
+        elif [[ "$in_section" == true && "$line" =~ ^[a-z_]+: && ! "$line" =~ ^[[:space:]] ]]; then
+            break
+        elif [[ "$in_section" == true && "$line" =~ ^[[:space:]]+${model_name}:[[:space:]]*(.+) ]]; then
+            provider="${BASH_REMATCH[1]}"
+            provider=$(echo "$provider" | tr -d '"' | tr -d "'" | xargs)
             echo "$provider"
             return 0
         fi
-    fi
+    done < "$MODELS_CONFIG"
 
     # No fallback - model must be in models.yaml to catch typos
+    return 1
+}
+
+# Check if a model is in the expensive list
+is_expensive_model() {
+    local model_name="$1"
+
+    if [[ ! -f "$MODELS_CONFIG" ]]; then
+        return 1
+    fi
+
+    local in_expensive=false
+    while IFS= read -r line; do
+        if [[ "$line" =~ ^expensive: ]]; then
+            in_expensive=true
+        elif [[ "$in_expensive" == true && "$line" =~ ^[a-z_]+: && ! "$line" =~ ^[[:space:]] ]]; then
+            break
+        elif [[ "$in_expensive" == true && "$line" =~ ^[[:space:]]*-[[:space:]]*(.+) ]]; then
+            local expensive_model="${BASH_REMATCH[1]}"
+            expensive_model=$(echo "$expensive_model" | tr -d '"' | tr -d "'" | xargs)
+            if [[ "$expensive_model" == "$model_name" ]]; then
+                return 0
+            fi
+        fi
+    done < "$MODELS_CONFIG"
+
     return 1
 }
 
@@ -97,33 +135,49 @@ show_available_models() {
         return
     fi
 
-    local in_models=false
-    local claude_models=""
-    local gemini_models=""
-    local codex_models=""
+    local section=""
+    local api_claude="" api_gemini="" api_codex=""
+    local cli_claude="" cli_gemini="" cli_codex=""
 
     while IFS= read -r line; do
-        if [[ "$line" =~ ^models: ]]; then
-            in_models=true
-        elif [[ "$in_models" == true && "$line" =~ ^[a-z]+: && ! "$line" =~ ^[[:space:]] ]]; then
-            break
-        elif [[ "$in_models" == true && "$line" =~ ^[[:space:]]+([^:]+):[[:space:]]*(.+) ]]; then
+        if [[ "$line" =~ ^api_models: ]]; then
+            section="api"
+        elif [[ "$line" =~ ^cli_models: ]]; then
+            section="cli"
+        elif [[ "$line" =~ ^[a-z_]+: && ! "$line" =~ ^[[:space:]] ]]; then
+            section=""
+        elif [[ -n "$section" && "$line" =~ ^[[:space:]]+([^:]+):[[:space:]]*(.+) ]]; then
             local model_name="${BASH_REMATCH[1]}"
             local provider="${BASH_REMATCH[2]}"
             model_name=$(echo "$model_name" | tr -d '"' | tr -d "'" | xargs)
             provider=$(echo "$provider" | tr -d '"' | tr -d "'" | xargs)
 
-            case "$provider" in
-                claude) claude_models="${claude_models:+$claude_models, }$model_name" ;;
-                gemini) gemini_models="${gemini_models:+$gemini_models, }$model_name" ;;
-                codex) codex_models="${codex_models:+$codex_models, }$model_name" ;;
-            esac
+            if [[ "$section" == "api" ]]; then
+                case "$provider" in
+                    claude) api_claude="${api_claude:+$api_claude, }$model_name" ;;
+                    gemini) api_gemini="${api_gemini:+$api_gemini, }$model_name" ;;
+                    codex) api_codex="${api_codex:+$api_codex, }$model_name" ;;
+                esac
+            else
+                case "$provider" in
+                    claude) cli_claude="${cli_claude:+$cli_claude, }$model_name" ;;
+                    gemini) cli_gemini="${cli_gemini:+$cli_gemini, }$model_name" ;;
+                    codex) cli_codex="${cli_codex:+$cli_codex, }$model_name" ;;
+                esac
+            fi
         fi
     done < "$MODELS_CONFIG"
 
-    echo "  claude: ${claude_models:-(none configured)}"
-    echo "  gemini: ${gemini_models:-(none configured)}"
-    echo "  codex:  ${codex_models:-(none configured)}"
+    echo ""
+    echo "  API models (--api-model):"
+    echo "    claude: ${api_claude:-(none)}"
+    echo "    gemini: ${api_gemini:-(none)}"
+    echo "    codex:  ${api_codex:-(none)}"
+    echo ""
+    echo "  CLI models (--model):"
+    echo "    claude: ${cli_claude:-(none)}"
+    echo "    gemini: ${cli_gemini:-(none)}"
+    echo "    codex:  ${cli_codex:-(none)}"
     echo ""
     echo "To add a new model, update configs/models.yaml"
 }
@@ -264,8 +318,8 @@ done
 # Resolve provider from model if not explicitly set
 # Priority: --api-model (for headless workflows), then --model
 if [[ -z "$PROVIDER" && -n "$API_MODEL" ]]; then
-    # When --api-model is specified, resolve provider from it
-    PROVIDER=$(resolve_provider_from_model "$API_MODEL" || true)
+    # When --api-model is specified, resolve provider from api_models section
+    PROVIDER=$(resolve_provider_from_model "$API_MODEL" "api_models" || true)
     if [[ -z "$PROVIDER" ]]; then
         log_error "Unknown API model '$API_MODEL'"
         echo ""
@@ -273,12 +327,42 @@ if [[ -z "$PROVIDER" && -n "$API_MODEL" ]]; then
         exit 1
     fi
 elif [[ -z "$PROVIDER" && -n "$MODEL" ]]; then
-    PROVIDER=$(resolve_provider_from_model "$MODEL" || true)
+    # Resolve from cli_models section
+    PROVIDER=$(resolve_provider_from_model "$MODEL" "cli_models" || true)
     if [[ -z "$PROVIDER" ]]; then
-        log_error "Unknown model '$MODEL'"
+        log_error "Unknown CLI model '$MODEL'"
         echo ""
         show_available_models
         exit 1
+    fi
+fi
+
+# Verify expensive models require explicit confirmation
+if [[ -n "$API_MODEL" ]] && is_expensive_model "$API_MODEL"; then
+    if [[ "$AUTO_APPROVE" != true ]]; then
+        log_warning "Model '$API_MODEL' is marked as expensive (high cost)"
+        read -p "Are you sure you want to use this model? (y/N) " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            log_error "Aborted. Use a different model or add --auto-approve to skip confirmation."
+            exit 1
+        fi
+    else
+        log_warning "Using expensive model '$API_MODEL' (--auto-approve skipped confirmation)"
+    fi
+fi
+
+if [[ -n "$MODEL" ]] && is_expensive_model "$MODEL"; then
+    if [[ "$AUTO_APPROVE" != true ]]; then
+        log_warning "Model '$MODEL' is marked as expensive (high cost)"
+        read -p "Are you sure you want to use this model? (y/N) " -n 1 -r
+        echo
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            log_error "Aborted. Use a different model or add --auto-approve to skip confirmation."
+            exit 1
+        fi
+    else
+        log_warning "Using expensive model '$MODEL' (--auto-approve skipped confirmation)"
     fi
 fi
 

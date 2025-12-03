@@ -597,6 +597,20 @@ else
     log_success "Normalization complete"
 fi
 
+# Create combined scoring file for dashboard
+log_info "Creating combined scoring data..."
+python3 "$SRC_DIR/utils/combine_normalized.py" \
+    --normalized-dir "$NORMALIZED_DIR" \
+    --output "$NORMALIZED_DIR/combined_scoring.json" \
+    --type freeform
+
+if [[ $? -ne 0 ]]; then
+    log_error "Failed to create combined scoring data"
+    exit 1
+fi
+
+log_success "Stage 4 complete"
+
 # Stop after stage 4 if requested
 if [[ "$STOP_AFTER_STAGE" == "4" ]]; then
     log_info "Stopping after stage 4 as requested (--stop-after 4)"

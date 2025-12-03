@@ -557,7 +557,7 @@ if [[ $TASKS_TO_RUN -gt 0 ]]; then
         PARALLEL_ARGS+=(--force-xargs)
     fi
 
-    "$SRC_DIR/parallel_runner.sh" "${PARALLEL_ARGS[@]}"
+    "$SRC_DIR/parallel_runner.sh" "${PARALLEL_ARGS[@]}" || true
 
     log_success "Marker agents completed"
 else
@@ -783,7 +783,7 @@ else
         UNIFIER_ARGS+=(--force-xargs)
     fi
 
-    "$SRC_DIR/parallel_runner.sh" "${UNIFIER_ARGS[@]}"
+    "$SRC_DIR/parallel_runner.sh" "${UNIFIER_ARGS[@]}" || true
 
     log_success "Unifier agents completed"
 fi

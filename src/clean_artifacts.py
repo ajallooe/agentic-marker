@@ -13,11 +13,12 @@ from pathlib import Path
 from typing import List, Tuple
 
 
-def load_artifacts(artifacts_file: Path) -> List[str]:
+def load_artifacts(artifacts_file: Path, quiet: bool = False) -> List[str]:
     """Load artifact strings from JSONL file."""
 
     if not artifacts_file.exists():
-        print(f"Warning: Artifacts file not found: {artifacts_file}")
+        if not quiet:
+            print(f"Warning: Artifacts file not found: {artifacts_file}", file=sys.stderr)
         return []
 
     artifacts = []
@@ -32,20 +33,21 @@ def load_artifacts(artifacts_file: Path) -> List[str]:
                     data = json.loads(line)
                     if 'artifact' in data:
                         artifacts.append(data['artifact'])
-                    else:
-                        print(f"Warning: Line {line_num} missing 'artifact' field")
+                    elif not quiet:
+                        print(f"Warning: Line {line_num} missing 'artifact' field", file=sys.stderr)
                 except json.JSONDecodeError as e:
-                    print(f"Warning: Invalid JSON at line {line_num}: {e}")
+                    if not quiet:
+                        print(f"Warning: Invalid JSON at line {line_num}: {e}", file=sys.stderr)
 
     except Exception as e:
-        print(f"Error loading artifacts file: {e}")
+        print(f"Error loading artifacts file: {e}", file=sys.stderr)
         return []
 
     return artifacts
 
 
 def clean_file(input_file: Path, artifacts: List[str], in_place: bool = False,
-               output_file: Path = None) -> Tuple[int, int]:
+               output_file: Path = None, quiet: bool = False) -> Tuple[int, int]:
     """
     Clean artifacts from a file.
 
@@ -54,7 +56,7 @@ def clean_file(input_file: Path, artifacts: List[str], in_place: bool = False,
     """
 
     if not input_file.exists():
-        print(f"Error: Input file not found: {input_file}")
+        print(f"Error: Input file not found: {input_file}", file=sys.stderr)
         return 0, 0
 
     # Read file
@@ -62,7 +64,7 @@ def clean_file(input_file: Path, artifacts: List[str], in_place: bool = False,
         with open(input_file, 'r', encoding='utf-8') as f:
             content = f.read()
     except Exception as e:
-        print(f"Error reading file: {e}")
+        print(f"Error reading file: {e}", file=sys.stderr)
         return 0, 0
 
     original_content = content
@@ -91,18 +93,20 @@ def clean_file(input_file: Path, artifacts: List[str], in_place: bool = False,
         if in_place:
             with open(input_file, 'w', encoding='utf-8') as f:
                 f.write(content)
-            print(f"✓ Cleaned {input_file} in-place")
+            if not quiet:
+                print(f"✓ Cleaned {input_file} in-place")
         elif output_file:
             with open(output_file, 'w', encoding='utf-8') as f:
                 f.write(content)
-            print(f"✓ Cleaned version saved to {output_file}")
+            if not quiet:
+                print(f"✓ Cleaned version saved to {output_file}")
         else:
             # Output to stdout
             print(content, end='')
             return removals_count, lines_cleaned
 
     except Exception as e:
-        print(f"Error writing output: {e}")
+        print(f"Error writing output: {e}", file=sys.stderr)
         return 0, 0
 
     return removals_count, lines_cleaned
@@ -122,6 +126,8 @@ def main():
                        help='Artifacts JSONL file (default: configs/processing_artifacts.jsonl)')
     parser.add_argument('-v', '--verbose', action='store_true',
                        help='Verbose output')
+    parser.add_argument('-q', '--quiet', action='store_true',
+                       help='Suppress all output except errors')
     parser.add_argument('--dry-run', action='store_true',
                        help='Show what would be cleaned without modifying files')
 
@@ -141,16 +147,17 @@ def main():
         artifacts_file = script_dir / 'configs' / 'processing_artifacts.jsonl'
 
     # Load artifacts
-    if args.verbose:
+    if args.verbose and not args.quiet:
         print(f"Loading artifacts from: {artifacts_file}")
 
-    artifacts = load_artifacts(artifacts_file)
+    artifacts = load_artifacts(artifacts_file, quiet=args.quiet)
 
     if not artifacts:
-        print("No artifacts loaded. Nothing to clean.")
+        if not args.quiet:
+            print("No artifacts loaded. Nothing to clean.")
         return 0
 
-    if args.verbose:
+    if args.verbose and not args.quiet:
         print(f"Loaded {len(artifacts)} artifact(s)")
         for i, artifact in enumerate(artifacts, 1):
             # Show first 50 chars of each artifact
@@ -191,10 +198,11 @@ def main():
         args.input_file,
         artifacts,
         in_place=args.in_place,
-        output_file=args.output
+        output_file=args.output,
+        quiet=args.quiet
     )
 
-    if args.verbose and (removals_count > 0 or lines_cleaned > 0):
+    if args.verbose and not args.quiet and (removals_count > 0 or lines_cleaned > 0):
         print(f"\nCleaning summary:")
         print(f"  Artifacts removed: {removals_count}")
         print(f"  Lines affected: {lines_cleaned}")

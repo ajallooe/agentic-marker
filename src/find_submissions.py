@@ -109,9 +109,10 @@ class SubmissionFinder:
         folder_name = None
 
         # Try to extract from Moodle folder structure first
-        if rel_path and len(rel_path.parts) >= 2:
+        if rel_path and len(rel_path.parts) >= 1:
             # Look for Moodle format: "StudentName_ID_assignsubmission_file"
-            for part in rel_path.parts[1:]:  # Skip section folder
+            # Check all parts (Moodle folder may be at any level)
+            for part in rel_path.parts:
                 moodle_match = re.match(r'^(.+?)_\d+_assignsubmission_file$', part)
                 if moodle_match:
                     folder_name = moodle_match.group(1)
@@ -123,23 +124,22 @@ class SubmissionFinder:
         if paren_match:
             paren_name = paren_match.group(1).strip().replace('_', ' ')
 
-        # Decision logic
+        # Decision logic - priority:
+        # 1. Moodle folder name (most authoritative, from LMS)
+        # 2. Parentheses in filename (if not a placeholder)
+        # 3. Extracted from filename as fallback
         name = None
 
         # Check if parentheses name is a placeholder or generic
         placeholder_names = {'student', 'your name', 'name', 'student name', 'firstname lastname'}
         paren_is_placeholder = paren_name and paren_name.lower() in placeholder_names
 
-        if paren_name and not paren_is_placeholder:
-            # Prefer parentheses if it's a real name
-            name = paren_name
-        elif folder_name:
-            # Use Moodle folder name
+        if folder_name:
+            # Prefer Moodle folder name (most authoritative)
             name = folder_name
-        elif paren_name:
-            # Even if placeholder, use it if no folder name available
-            # But try to extract from folder name as last resort
-            name = folder_name if folder_name else paren_name
+        elif paren_name and not paren_is_placeholder:
+            # Use parentheses if it's a real name
+            name = paren_name
         else:
             # Fallback: try to extract name from filename
             name = self._extract_name_from_filename(filename)
